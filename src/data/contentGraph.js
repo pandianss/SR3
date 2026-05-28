@@ -76,70 +76,415 @@ export const MODULES = {
 };
 
 export const TOPICS = {
+
+  // ════════════════════════════════════════════════════════
+  //  ABM — Advanced Bank Management
+  // ════════════════════════════════════════════════════════
   "ABM-A": [
-    { id: "T-ABM-A1", name: "Business Cycles & GDP Trends", weightage: "High", dependency: [] },
-    { id: "T-ABM-A2", name: "Inflation Mechanics (CPI vs WPI)", weightage: "Medium", dependency: [] },
-    { id: "T-ABM-A3", name: "Union Budget & Fiscal Policy", weightage: "High", dependency: ["T-ABM-A1"] }
+    { id: "T-ABM-A1",  name: "Business Cycles & GDP Trends",                          weightage: "High",     dependency: [] },
+    { id: "T-ABM-A2",  name: "Inflation Mechanics (CPI vs WPI)",                      weightage: "High",     dependency: [] },
+    { id: "T-ABM-A3",  name: "Union Budget, Fiscal Policy & FRBM",                    weightage: "High",     dependency: ["T-ABM-A1"] },
+    { id: "T-ABM-A4",  name: "Demand, Supply & Price Elasticity",                     weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-A5",  name: "National Income Accounting (GDP, GNP, NNP, NDP)",       weightage: "High",     dependency: [] },
+    { id: "T-ABM-A6",  name: "Money Supply & Monetary Aggregates (M0–M4)",            weightage: "Critical", dependency: [] },
+    { id: "T-ABM-A7",  name: "Monetary Policy — Instruments & Transmission",          weightage: "Critical", dependency: ["T-ABM-A6"] },
+    { id: "T-ABM-A8",  name: "Balance of Payments — Current & Capital Account",       weightage: "High",     dependency: [] },
+    { id: "T-ABM-A9",  name: "Foreign Exchange Rate Determination",                   weightage: "High",     dependency: ["T-ABM-A8"] },
+    { id: "T-ABM-A10", name: "Economic Reforms — LPG, Financial Sector Liberalisation", weightage: "Medium", dependency: [] },
+    { id: "T-ABM-A11", name: "Indian Financial System — RBI, SEBI, IRDAI, PFRDA",    weightage: "Medium",   dependency: [] }
   ],
   "ABM-B": [
-    { id: "T-ABM-B1", name: "HR Planning & Recruitment in Banks", weightage: "Medium", dependency: [] },
-    { id: "T-ABM-B2", name: "Training, Development & Performance Appraisal", weightage: "Medium", dependency: ["T-ABM-B1"] },
-    { id: "T-ABM-B3", name: "Motivation Theories & Leadership Styles", weightage: "Medium", dependency: [] },
-    { id: "T-ABM-B4", name: "Organisational Behaviour & Change Management", weightage: "Low", dependency: [] }
+    { id: "T-ABM-B1",  name: "HR Planning & Recruitment in Banks",                    weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-B2",  name: "Training, Development & Performance Appraisal",         weightage: "Medium",   dependency: ["T-ABM-B1"] },
+    { id: "T-ABM-B3",  name: "Motivation Theories & Leadership Styles",               weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-B4",  name: "Organisational Behaviour & Change Management",          weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-B5",  name: "Job Analysis, Job Description & Job Evaluation",        weightage: "Low",      dependency: [] },
+    { id: "T-ABM-B6",  name: "Compensation Management & Wage Theories",               weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-B7",  name: "Industrial Relations & Trade Union Act 1926",           weightage: "High",     dependency: [] },
+    { id: "T-ABM-B8",  name: "Industrial Disputes Act 1947",                          weightage: "High",     dependency: ["T-ABM-B7"] },
+    { id: "T-ABM-B9",  name: "Grievance Handling & Disciplinary Procedures",          weightage: "Medium",   dependency: ["T-ABM-B8"] },
+    { id: "T-ABM-B10", name: "Employee Welfare, Social Security & Factories Act",     weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-B11", name: "Collective Bargaining & Wage Settlements in Banks",     weightage: "Medium",   dependency: ["T-ABM-B7"] }
   ],
   "ABM-C": [
-    { id: "T-ABM-C1", name: "Working Capital Assessment", weightage: "Critical", dependency: [] },
-    { id: "T-ABM-C2", name: "NPA Management & Resolution", weightage: "Critical", dependency: [] },
-    { id: "T-ABM-C3", name: "Credit Risk Rating Frameworks", weightage: "High", dependency: ["T-ABM-C1"] }
+    { id: "T-ABM-C1",  name: "Working Capital Assessment (Nayak & Tandon Methods)",   weightage: "Critical", dependency: [] },
+    { id: "T-ABM-C2",  name: "NPA Classification, Provisioning & Resolution",         weightage: "Critical", dependency: [] },
+    { id: "T-ABM-C3",  name: "Credit Risk Rating & Risk-Based Pricing",               weightage: "High",     dependency: ["T-ABM-C1"] },
+    { id: "T-ABM-C4",  name: "Financial Statement Analysis for Credit",               weightage: "Critical", dependency: [] },
+    { id: "T-ABM-C5",  name: "Term Loan Appraisal & Project Finance",                 weightage: "Critical", dependency: ["T-ABM-C1"] },
+    { id: "T-ABM-C6",  name: "DSCR, LLCR & Project Viability Assessment",            weightage: "Critical", dependency: ["T-ABM-C5"] },
+    { id: "T-ABM-C7",  name: "Letters of Credit — Types, UCP 600 & Operations",       weightage: "High",     dependency: [] },
+    { id: "T-ABM-C8",  name: "Bank Guarantees — Types, Invocation & Risk",            weightage: "High",     dependency: [] },
+    { id: "T-ABM-C9",  name: "Consortium Lending & Multiple Banking Arrangements",    weightage: "Medium",   dependency: ["T-ABM-C1"] },
+    { id: "T-ABM-C10", name: "Priority Sector Lending — Targets & Sub-targets",       weightage: "Critical", dependency: [] },
+    { id: "T-ABM-C11", name: "Agricultural Credit — KCC, Crop Loans & Land Dev.",     weightage: "High",     dependency: ["T-ABM-C10"] },
+    { id: "T-ABM-C12", name: "MSME Credit — Udyam, CGTMSE & Stand-up India",         weightage: "High",     dependency: ["T-ABM-C10"] }
   ],
   "ABM-D": [
-    { id: "T-ABM-D1", name: "KYC / AML Framework & Compliance", weightage: "Critical", dependency: [] },
-    { id: "T-ABM-D2", name: "Corporate Governance in Banks", weightage: "High", dependency: [] },
-    { id: "T-ABM-D3", name: "Fraud Risk Management & Vigilance", weightage: "High", dependency: ["T-ABM-D1"] }
+    { id: "T-ABM-D1",  name: "KYC / AML Framework — PMLA & FIU-IND",                 weightage: "Critical", dependency: [] },
+    { id: "T-ABM-D2",  name: "Corporate Governance in Banks",                         weightage: "High",     dependency: [] },
+    { id: "T-ABM-D3",  name: "Fraud Risk Management & Vigilance (CVC/CVO)",           weightage: "High",     dependency: ["T-ABM-D1"] },
+    { id: "T-ABM-D4",  name: "FEMA — Current & Capital Account Transactions",         weightage: "High",     dependency: [] },
+    { id: "T-ABM-D5",  name: "Banking Ombudsman Scheme & Grievance Redressal",        weightage: "High",     dependency: [] },
+    { id: "T-ABM-D6",  name: "Fair Practices Code & Consumer Protection Act 2019",    weightage: "Medium",   dependency: [] },
+    { id: "T-ABM-D7",  name: "Basel Pillar 2 — ICAAP & Risk-Based Supervision",       weightage: "High",     dependency: [] },
+    { id: "T-ABM-D8",  name: "Prompt Corrective Action (PCA) Framework",              weightage: "High",     dependency: ["T-ABM-D7"] },
+    { id: "T-ABM-D9",  name: "Right to Information Act 2005 & Data Privacy",          weightage: "Low",      dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  BFM — Bank Financial Management
+  // ════════════════════════════════════════════════════════
+  "BFM-A": [
+    { id: "T-BFM-A1",  name: "Foreign Exchange Market — Structure & Participants",    weightage: "High",     dependency: [] },
+    { id: "T-BFM-A2",  name: "Exchange Rate Quotations — Direct, Indirect, Cross Rates", weightage: "Critical", dependency: ["T-BFM-A1"] },
+    { id: "T-BFM-A3",  name: "Exchange Rate Determination — PPP, IRP & BOP Theory",  weightage: "High",     dependency: ["T-BFM-A2"] },
+    { id: "T-BFM-A4",  name: "Forward Exchange Contracts & Currency Hedging",         weightage: "Critical", dependency: ["T-BFM-A2"] },
+    { id: "T-BFM-A5",  name: "NOSTRO, VOSTRO & LORO Accounts",                        weightage: "High",     dependency: [] },
+    { id: "T-BFM-A6",  name: "Letters of Credit — UCP 600, Types & Lifecycle",        weightage: "Critical", dependency: [] },
+    { id: "T-BFM-A7",  name: "Bank Guarantees & Standby Letters of Credit",           weightage: "High",     dependency: [] },
+    { id: "T-BFM-A8",  name: "Export Finance — PCFC, EPC & Post-shipment Credit",     weightage: "High",     dependency: ["T-BFM-A5"] },
+    { id: "T-BFM-A9",  name: "Import Finance — Buyer's Credit & Supplier's Credit",   weightage: "Medium",   dependency: ["T-BFM-A6"] },
+    { id: "T-BFM-A10", name: "FEMA — Authorised Dealer Categories & Remittances",     weightage: "High",     dependency: [] },
+    { id: "T-BFM-A11", name: "SWIFT, Correspondent Banking & International Settlements", weightage: "Medium", dependency: [] }
   ],
   "BFM-B": [
-    { id: "T-BFM-B1", name: "Basel III Capital Adequacy", weightage: "Critical", dependency: [] },
-    { id: "T-BFM-B2", name: "Value at Risk (VaR) Analysis", weightage: "High", dependency: [] },
-    { id: "T-BFM-B3", name: "Operational Risk Management (BIA, TSA, AMA)", weightage: "Medium", dependency: ["T-BFM-B1"] }
+    { id: "T-BFM-B1",  name: "Basel III Capital Adequacy — CRAR, CET1, Buffers",      weightage: "Critical", dependency: [] },
+    { id: "T-BFM-B2",  name: "Value at Risk (VaR) — Models & Interpretation",         weightage: "Critical", dependency: [] },
+    { id: "T-BFM-B3",  name: "Operational Risk — BIA, TSA, AMA & Loss Categories",    weightage: "High",     dependency: ["T-BFM-B1"] },
+    { id: "T-BFM-B4",  name: "Credit Risk Metrics — PD, LGD, EAD & Expected Loss",   weightage: "Critical", dependency: ["T-BFM-B1"] },
+    { id: "T-BFM-B5",  name: "Credit Risk Mitigation — Collateral, Netting & CDS",   weightage: "High",     dependency: ["T-BFM-B4"] },
+    { id: "T-BFM-B6",  name: "Market Risk — Sensitivity, Greeks & Stress Testing",    weightage: "High",     dependency: ["T-BFM-B2"] },
+    { id: "T-BFM-B7",  name: "Basel III Leverage Ratio & Capital Buffers (CCB, CCyB, D-SIB)", weightage: "High", dependency: ["T-BFM-B1"] },
+    { id: "T-BFM-B8",  name: "Large Exposure Framework & Concentration Risk",         weightage: "Medium",   dependency: ["T-BFM-B4"] },
+    { id: "T-BFM-B9",  name: "ICAAP — Internal Capital Adequacy Assessment",          weightage: "High",     dependency: ["T-BFM-B1"] }
+  ],
+  "BFM-C": [
+    { id: "T-BFM-C1",  name: "Treasury Organisation — Front, Mid & Back Office",      weightage: "Medium",   dependency: [] },
+    { id: "T-BFM-C2",  name: "Money Market Instruments — T-Bills, CPs, CDs, Repos",  weightage: "Critical", dependency: [] },
+    { id: "T-BFM-C3",  name: "Government Securities — G-Secs, SDLs, T-Bills, FRBs", weightage: "Critical", dependency: [] },
+    { id: "T-BFM-C4",  name: "Bond Pricing, YTM & Yield Curve Shapes",               weightage: "Critical", dependency: ["T-BFM-C3"] },
+    { id: "T-BFM-C5",  name: "Duration, Modified Duration & Convexity",              weightage: "Critical", dependency: ["T-BFM-C4"] },
+    { id: "T-BFM-C6",  name: "Interest Rate Derivatives — FRAs, IRF & Interest Rate Swaps", weightage: "High", dependency: ["T-BFM-C5"] },
+    { id: "T-BFM-C7",  name: "Equity & Currency Derivatives for Bankers",             weightage: "Medium",   dependency: [] },
+    { id: "T-BFM-C8",  name: "Investment Portfolio — HTM, AFS, HFT Classification & Valuation", weightage: "Critical", dependency: ["T-BFM-C3"] },
+    { id: "T-BFM-C9",  name: "ALCO — Functions, Reporting & Limit Setting",           weightage: "High",     dependency: [] },
+    { id: "T-BFM-C10", name: "Funds Transfer Pricing (FTP) & Internal Benchmarking", weightage: "Medium",   dependency: ["T-BFM-C9"] }
   ],
   "BFM-D": [
-    { id: "T-BFM-D1", name: "Liquidity Coverage Ratio (LCR)", weightage: "Critical", dependency: ["T-BFM-B1"] },
-    { id: "T-BFM-D2", name: "Interest Rate Risk & ALM", weightage: "High", dependency: [] },
-    { id: "T-BFM-D3", name: "Net Stable Funding Ratio (NSFR)", weightage: "High", dependency: ["T-BFM-D1"] }
+    { id: "T-BFM-D1",  name: "Liquidity Coverage Ratio (LCR) — HQLA & Net Outflows", weightage: "Critical", dependency: ["T-BFM-B1"] },
+    { id: "T-BFM-D2",  name: "Interest Rate Risk in Banking Book (IRRBB) & ALM",      weightage: "Critical", dependency: [] },
+    { id: "T-BFM-D3",  name: "Net Stable Funding Ratio (NSFR)",                       weightage: "High",     dependency: ["T-BFM-D1"] },
+    { id: "T-BFM-D4",  name: "Gap Analysis — Rate Sensitive Assets & Liabilities",   weightage: "Critical", dependency: ["T-BFM-D2"] },
+    { id: "T-BFM-D5",  name: "Earnings at Risk (EaR) & NII Sensitivity Analysis",    weightage: "High",     dependency: ["T-BFM-D4"] },
+    { id: "T-BFM-D6",  name: "Economic Value of Equity (EVE) & Duration Gap",        weightage: "High",     dependency: ["T-BFM-D4"] },
+    { id: "T-BFM-D7",  name: "Stress Testing in Banks — Types & RBI Requirements",   weightage: "High",     dependency: [] },
+    { id: "T-BFM-D8",  name: "Capital Planning, RWA Management & ICAAP Integration", weightage: "High",     dependency: ["T-BFM-B1"] },
+    { id: "T-BFM-D9",  name: "Performance Metrics — NIM, ROA, ROE, RAROC",           weightage: "High",     dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  ABFM — Advanced Business & Financial Management
+  // ════════════════════════════════════════════════════════
+  "ABFM-A": [
+    { id: "T-ABFM-A1", name: "Strategic Management — SWOT, PESTLE, Porter's Five Forces", weightage: "High",   dependency: [] },
+    { id: "T-ABFM-A2", name: "BCG Matrix, GE-McKinsey Matrix & Strategic Portfolio",  weightage: "Medium",   dependency: ["T-ABFM-A1"] },
+    { id: "T-ABFM-A3", name: "Corporate Planning, Budgeting & MBO",                   weightage: "Medium",   dependency: [] },
+    { id: "T-ABFM-A4", name: "Balanced Scorecard & Management Control Systems",       weightage: "High",     dependency: [] },
+    { id: "T-ABFM-A5", name: "Decision Making — Quantitative Models & Decision Trees", weightage: "Medium",  dependency: [] },
+    { id: "T-ABFM-A6", name: "Project Management — CPM, PERT & Gantt Charts",         weightage: "High",     dependency: [] },
+    { id: "T-ABFM-A7", name: "TQM, Six Sigma, Lean & BPR",                            weightage: "Medium",   dependency: [] },
+    { id: "T-ABFM-A8", name: "Marketing Management — STP, 4Ps & CRM for Banks",       weightage: "Medium",   dependency: [] },
+    { id: "T-ABFM-A9", name: "Operations & Supply Chain Management",                  weightage: "Low",      dependency: [] }
   ],
   "ABFM-B": [
-    { id: "T-ABFM-B1", name: "Capital Asset Pricing Model (CAPM)", weightage: "High", dependency: [] },
-    { id: "T-ABFM-B2", name: "Capital Budgeting Techniques (NPV/IRR)", weightage: "Critical", dependency: [] },
-    { id: "T-ABFM-B3", name: "Weighted Average Cost of Capital (WACC)", weightage: "High", dependency: ["T-ABFM-B1"] }
+    { id: "T-ABFM-B1", name: "Capital Asset Pricing Model (CAPM)",                    weightage: "Critical", dependency: [] },
+    { id: "T-ABFM-B2", name: "Capital Budgeting — NPV, IRR, MIRR & Payback",          weightage: "Critical", dependency: [] },
+    { id: "T-ABFM-B3", name: "Weighted Average Cost of Capital (WACC)",               weightage: "Critical", dependency: ["T-ABFM-B1"] },
+    { id: "T-ABFM-B4", name: "Portfolio Theory — Markowitz, Efficient Frontier & Beta", weightage: "High",   dependency: ["T-ABFM-B1"] },
+    { id: "T-ABFM-B5", name: "Capital Structure Theories — MM Theorem, Trade-off, Pecking Order", weightage: "High", dependency: ["T-ABFM-B3"] },
+    { id: "T-ABFM-B6", name: "Dividend Policy — Gordon's Model, Walter's Model, MM Irrelevance", weightage: "High", dependency: [] },
+    { id: "T-ABFM-B7", name: "Working Capital Management — Cash, Receivables, Inventory", weightage: "Critical", dependency: [] },
+    { id: "T-ABFM-B8", name: "Derivatives for Corporate Finance — Options, Futures, Swaps", weightage: "Medium", dependency: [] }
   ],
+  "ABFM-C": [
+    { id: "T-ABFM-C1", name: "Business Valuation — DCF, Multiples & Asset-based",     weightage: "Critical", dependency: ["T-ABFM-B2"] },
+    { id: "T-ABFM-C2", name: "Free Cash Flow — FCFF & FCFE Computation",              weightage: "Critical", dependency: ["T-ABFM-C1"] },
+    { id: "T-ABFM-C3", name: "Enterprise Value vs. Equity Value & EV Multiples",      weightage: "High",     dependency: ["T-ABFM-C1"] },
+    { id: "T-ABFM-C4", name: "Mergers & Acquisitions — Types, Rationale & Process",   weightage: "High",     dependency: [] },
+    { id: "T-ABFM-C5", name: "M&A Due Diligence — Financial, Legal & Commercial",     weightage: "High",     dependency: ["T-ABFM-C4"] },
+    { id: "T-ABFM-C6", name: "SEBI Takeover Code (SAST Regulations 2011)",            weightage: "High",     dependency: ["T-ABFM-C4"] },
+    { id: "T-ABFM-C7", name: "Post-Merger Integration & Synergy Realisation",         weightage: "Medium",   dependency: ["T-ABFM-C4"] },
+    { id: "T-ABFM-C8", name: "Leveraged Buyouts (LBOs) & Private Equity Basics",      weightage: "Medium",   dependency: [] },
+    { id: "T-ABFM-C9", name: "Corporate Restructuring — Demerger, Spin-off, Buyback", weightage: "Medium",   dependency: [] }
+  ],
+  "ABFM-D": [
+    { id: "T-ABFM-D1", name: "Project Finance vs. Corporate Finance — Structure & SPV", weightage: "Critical", dependency: [] },
+    { id: "T-ABFM-D2", name: "Project Appraisal — Technical, Financial, Economic & Social", weightage: "Critical", dependency: ["T-ABFM-D1"] },
+    { id: "T-ABFM-D3", name: "DSCR, LLCR & PLCR in Infrastructure Finance",           weightage: "Critical", dependency: ["T-ABFM-D2"] },
+    { id: "T-ABFM-D4", name: "Financial Modelling for Projects — Sensitivity & Scenarios", weightage: "High", dependency: ["T-ABFM-D3"] },
+    { id: "T-ABFM-D5", name: "Risk Identification & Mitigation in Project Finance",   weightage: "High",     dependency: ["T-ABFM-D2"] },
+    { id: "T-ABFM-D6", name: "PPP Models — BOT, BOOT, DBFOT, HAM & EPC",              weightage: "Critical", dependency: ["T-ABFM-D1"] },
+    { id: "T-ABFM-D7", name: "Infrastructure Financing — Roads, Power & Ports",        weightage: "High",     dependency: ["T-ABFM-D6"] },
+    { id: "T-ABFM-D8", name: "Escrow, Waterfall Structures & Trust Mechanisms",        weightage: "High",     dependency: ["T-ABFM-D1"] },
+    { id: "T-ABFM-D9", name: "Mezzanine Finance, Subordinated Debt & Quasi-equity",   weightage: "Medium",   dependency: ["T-ABFM-D1"] },
+    { id: "T-ABFM-D10", name: "Term Sheet, Conditions Precedent & Loan Documentation", weightage: "Medium",  dependency: ["T-ABFM-D2"] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  BRBL — Banking Regulations & Business Laws
+  // ════════════════════════════════════════════════════════
   "BRBL-A": [
-    { id: "T-BRBL-A1", name: "Banking Regulation Act 1949", weightage: "Critical", dependency: [] },
-    { id: "T-BRBL-A2", name: "Reserve Bank of India Act 1934", weightage: "High", dependency: [] }
+    { id: "T-BRBL-A1",  name: "Banking Regulation Act 1949 — Key Sections",           weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-A2",  name: "Reserve Bank of India Act 1934",                       weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-A3",  name: "Negotiable Instruments Act 1881 — Bills, Cheques, PNs", weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-A4",  name: "Section 138 NI Act — Cheque Dishonour & Penalties",    weightage: "Critical", dependency: ["T-BRBL-A3"] },
+    { id: "T-BRBL-A5",  name: "Payment & Settlement Systems Act 2007",                 weightage: "High",     dependency: [] },
+    { id: "T-BRBL-A6",  name: "DICGC — Deposit Insurance Coverage & Claims",          weightage: "High",     dependency: [] },
+    { id: "T-BRBL-A7",  name: "Prevention of Money Laundering Act (PMLA) 2002",       weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-A8",  name: "FEMA 1999 — Key Provisions & Offences",                weightage: "High",     dependency: [] },
+    { id: "T-BRBL-A9",  name: "Financial Regulators — Mandate, Jurisdiction & MoU",   weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-A10", name: "Banking Ombudsman Scheme — Awards & Exclusions",        weightage: "High",     dependency: [] }
+  ],
+  "BRBL-B": [
+    { id: "T-BRBL-B1",  name: "Indian Contract Act 1872 — Essentials & Void Contracts", weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-B2",  name: "Contract of Guarantee & Indemnity",                    weightage: "Critical", dependency: ["T-BRBL-B1"] },
+    { id: "T-BRBL-B3",  name: "Law of Agency — Banker as Agent & Apparent Authority", weightage: "High",     dependency: ["T-BRBL-B1"] },
+    { id: "T-BRBL-B4",  name: "Pledge, Hypothecation & Assignment — Legal Distinctions", weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-B5",  name: "Law of Mortgage — Types & Banker's Remedies",          weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-B6",  name: "Banker's Lien, Right of Set-off & Appropriation",      weightage: "High",     dependency: [] },
+    { id: "T-BRBL-B7",  name: "Banker-Customer Relationship — Rights & Duties",       weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-B8",  name: "Garnishee Orders, Attachment & Court Orders",          weightage: "High",     dependency: [] },
+    { id: "T-BRBL-B9",  name: "Limitation Act 1963 — Banking Applications",           weightage: "High",     dependency: [] },
+    { id: "T-BRBL-B10", name: "Nomination Facilities in Bank Accounts",               weightage: "High",     dependency: [] },
+    { id: "T-BRBL-B11", name: "Special Account Types — Joint, HUF, Trust, Minor",    weightage: "High",     dependency: [] },
+    { id: "T-BRBL-B12", name: "Power of Attorney — Types, Validity & Revocation",    weightage: "Medium",   dependency: [] }
   ],
   "BRBL-C": [
-    { id: "T-BRBL-C1", name: "SARFAESI Act Operations & Powers", weightage: "Critical", dependency: ["T-BRBL-A1"] },
-    { id: "T-BRBL-C2", name: "Insolvency and Bankruptcy Code (IBC)", weightage: "High", dependency: [] }
+    { id: "T-BRBL-C1",  name: "SARFAESI Act 2002 — Powers, Procedure & Exemptions",   weightage: "Critical", dependency: ["T-BRBL-A1"] },
+    { id: "T-BRBL-C2",  name: "Insolvency & Bankruptcy Code 2016 (IBC)",              weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-C3",  name: "Recovery of Debts Act (DRT) — Jurisdiction & Process", weightage: "High",     dependency: [] },
+    { id: "T-BRBL-C4",  name: "Lok Adalat & MSME Facilitation Council",               weightage: "High",     dependency: [] },
+    { id: "T-BRBL-C5",  name: "Credit Information Companies (CICRA 2005) — CIBIL",   weightage: "High",     dependency: [] },
+    { id: "T-BRBL-C6",  name: "Bankers' Books Evidence Act 1891",                     weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-C7",  name: "Consumer Protection Act 2019 — Banking Context",       weightage: "High",     dependency: [] },
+    { id: "T-BRBL-C8",  name: "Factoring Regulation Act 2011",                        weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-C9",  name: "Warehousing Development & Regulation Act 2007",        weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-C10", name: "Microfinance Regulation & MFI Framework",              weightage: "Medium",   dependency: [] }
   ],
+  "BRBL-D": [
+    { id: "T-BRBL-D1",  name: "Companies Act 2013 — Key Sections for Bankers",        weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-D2",  name: "Types of Companies — Public, Private, OPC, Sec. 8",   weightage: "High",     dependency: ["T-BRBL-D1"] },
+    { id: "T-BRBL-D3",  name: "Directors — Duties, Liabilities & Disqualifications",  weightage: "High",     dependency: ["T-BRBL-D1"] },
+    { id: "T-BRBL-D4",  name: "Indian Partnership Act 1932 & LLP Act 2008",           weightage: "High",     dependency: [] },
+    { id: "T-BRBL-D5",  name: "Sale of Goods Act 1930 — Title, Property & Warranties", weightage: "High",    dependency: [] },
+    { id: "T-BRBL-D6",  name: "Information Technology Act 2000 — Cyber Crime for Bankers", weightage: "Critical", dependency: [] },
+    { id: "T-BRBL-D7",  name: "Right to Information Act 2005",                        weightage: "Low",      dependency: [] },
+    { id: "T-BRBL-D8",  name: "SEBI Regulations — Insider Trading & SAST Takeover Code", weightage: "High",  dependency: [] },
+    { id: "T-BRBL-D9",  name: "Insurance Laws & Bancassurance Compliance",            weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-D10", name: "Arbitration & Conciliation Act 1996",                  weightage: "Medium",   dependency: [] },
+    { id: "T-BRBL-D11", name: "Stamp Act — Applicability to Banking & Security Documents", weightage: "Medium", dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  Risk Management (Elective)
+  // ════════════════════════════════════════════════════════
   "Risk-A": [
-    { id: "T-Risk-A1", name: "Asset Liability Management Guidelines", weightage: "High", dependency: [] },
-    { id: "T-Risk-A2", name: "Stress Testing & Scenario Analysis", weightage: "Medium", dependency: [] }
+    { id: "T-Risk-A1",  name: "Asset Liability Management (ALM) — Concepts & Guidelines", weightage: "Critical", dependency: [] },
+    { id: "T-Risk-A2",  name: "Stress Testing & Scenario Analysis",                   weightage: "High",     dependency: [] },
+    { id: "T-Risk-A3",  name: "Risk Management Framework — Governance & Taxonomy",    weightage: "High",     dependency: [] },
+    { id: "T-Risk-A4",  name: "Enterprise Risk Management (ERM) — COSO & ISO 31000",  weightage: "High",     dependency: ["T-Risk-A3"] },
+    { id: "T-Risk-A5",  name: "Risk Appetite Statement, Tolerance & Limit Framework", weightage: "High",     dependency: ["T-Risk-A3"] },
+    { id: "T-Risk-A6",  name: "Risk Categories — Financial, Non-financial & Emerging", weightage: "Medium",  dependency: [] },
+    { id: "T-Risk-A7",  name: "Risk Culture & Three Lines of Defence Model",          weightage: "High",     dependency: [] },
+    { id: "T-Risk-A8",  name: "Integrated Risk Reporting & Board Risk Dashboards",    weightage: "Medium",   dependency: [] }
   ],
-  "Rural-C": [
-    { id: "T-Rural-C1", name: "Priority Sector Lending Limits", weightage: "Critical", dependency: [] },
-    { id: "T-Rural-C2", name: "Government Rural Development Schemes", weightage: "High", dependency: [] }
+  "Risk-B": [
+    { id: "T-Risk-B1",  name: "Credit Risk Fundamentals — PD, LGD, EAD, Maturity",   weightage: "Critical", dependency: [] },
+    { id: "T-Risk-B2",  name: "Internal Ratings Based (IRB) — F-IRB & A-IRB Approach", weightage: "Critical", dependency: ["T-Risk-B1"] },
+    { id: "T-Risk-B3",  name: "Expected Loss (EL), Unexpected Loss (UL) & ECAP",      weightage: "Critical", dependency: ["T-Risk-B1"] },
+    { id: "T-Risk-B4",  name: "Credit Portfolio Models — CreditMetrics & KMV",        weightage: "High",     dependency: ["T-Risk-B3"] },
+    { id: "T-Risk-B5",  name: "Credit Derivatives — CDS, CDOs & Credit-linked Notes", weightage: "High",     dependency: ["T-Risk-B1"] },
+    { id: "T-Risk-B6",  name: "Counterparty Credit Risk (CCR) & Credit Valuation Adjustment (CVA)", weightage: "High", dependency: ["T-Risk-B1"] },
+    { id: "T-Risk-B7",  name: "Sectoral & Geographic Credit Concentration Risk",      weightage: "High",     dependency: ["T-Risk-B1"] },
+    { id: "T-Risk-B8",  name: "Credit Risk Stress Testing & Reverse Stress Tests",    weightage: "High",     dependency: ["T-Risk-B2"] }
   ],
-  "Central-C": [
-    { id: "T-Central-C1", name: "Monetary Policy Instruments (CRR/SLR)", weightage: "Critical", dependency: [] },
-    { id: "T-Central-C2", name: "Liquidity Adjustment Facility (LAF)", weightage: "High", dependency: [] }
+  "Risk-C": [
+    { id: "T-Risk-C1",  name: "VaR Models — Historical, Parametric & Monte Carlo",    weightage: "Critical", dependency: [] },
+    { id: "T-Risk-C2",  name: "Expected Shortfall (ES/CVaR) & VaR Backtesting",       weightage: "Critical", dependency: ["T-Risk-C1"] },
+    { id: "T-Risk-C3",  name: "Option Sensitivities — Delta, Gamma, Vega, Rho & DV01", weightage: "High",   dependency: [] },
+    { id: "T-Risk-C4",  name: "Fundamental Review of Trading Book (FRTB) — SA vs IMA", weightage: "High",   dependency: ["T-Risk-C1"] },
+    { id: "T-Risk-C5",  name: "Operational Risk Categories — Basel 7 Loss Event Types", weightage: "Critical", dependency: [] },
+    { id: "T-Risk-C6",  name: "Operational Risk Capital — BIA, TSA & IMA Approaches", weightage: "Critical", dependency: ["T-Risk-C5"] },
+    { id: "T-Risk-C7",  name: "RCSA, Key Risk Indicators (KRIs) & Loss Data Collection", weightage: "High",  dependency: ["T-Risk-C5"] },
+    { id: "T-Risk-C8",  name: "Business Continuity Management (BCM) & Disaster Recovery", weightage: "High", dependency: [] }
+  ],
+  "Risk-D": [
+    { id: "T-Risk-D1",  name: "Risk Governance — Board Risk Committee & CRO Role",    weightage: "High",     dependency: [] },
+    { id: "T-Risk-D2",  name: "Risk Policy Framework & Limit Design",                 weightage: "High",     dependency: ["T-Risk-D1"] },
+    { id: "T-Risk-D3",  name: "RAROC, Economic Profit & Risk-Adjusted Performance",   weightage: "Critical", dependency: [] },
+    { id: "T-Risk-D4",  name: "Economic Capital vs. Regulatory Capital — Allocation", weightage: "Critical", dependency: ["T-Risk-D3"] },
+    { id: "T-Risk-D5",  name: "Pillar 2 — ICAAP Process & SREP Interaction",          weightage: "Critical", dependency: [] },
+    { id: "T-Risk-D6",  name: "Recovery & Resolution Planning — Living Wills & BREP", weightage: "High",     dependency: [] },
+    { id: "T-Risk-D7",  name: "Systemic Risk — D-SIBs, G-SIBs & Macroprudential Policy", weightage: "High", dependency: [] },
+    { id: "T-Risk-D8",  name: "Regulatory Risk Reporting — Basel Disclosures & Pillar 3", weightage: "Medium", dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  IT & Digital Banking (Elective)
+  // ════════════════════════════════════════════════════════
+  "IT-A": [
+    { id: "T-IT-A1",  name: "IT in Banking — Evolution, CBS & Digital Transformation",  weightage: "Medium",  dependency: [] },
+    { id: "T-IT-A2",  name: "Core Banking Solution (CBS) — Architecture & Modules",     weightage: "High",    dependency: [] },
+    { id: "T-IT-A3",  name: "Data Centres, Cloud Computing & Virtualisation in Banks",  weightage: "Medium",  dependency: [] },
+    { id: "T-IT-A4",  name: "IT Governance — COBIT Framework & IT Audit",               weightage: "High",    dependency: [] },
+    { id: "T-IT-A5",  name: "IT Risk Management & Technology Risk Framework",           weightage: "High",    dependency: [] },
+    { id: "T-IT-A6",  name: "Digital Banking — Internet, Mobile & Omni-channel",        weightage: "High",    dependency: [] }
+  ],
+  "IT-B": [
+    { id: "T-IT-B1",  name: "Payment Systems — RTGS, NEFT, IMPS, UPI & Bharat Bill Pay", weightage: "Critical", dependency: [] },
+    { id: "T-IT-B2",  name: "Card Payment Systems — Debit, Credit & Prepaid Cards",     weightage: "High",    dependency: [] },
+    { id: "T-IT-B3",  name: "Blockchain & Distributed Ledger Technology (DLT)",         weightage: "Medium",  dependency: [] },
+    { id: "T-IT-B4",  name: "Regulatory Framework — RBI IT Guidelines & Cyber Security Directions", weightage: "Critical", dependency: [] },
+    { id: "T-IT-B5",  name: "Fintech, Open Banking & API Ecosystem",                    weightage: "High",    dependency: [] },
+    { id: "T-IT-B6",  name: "Artificial Intelligence & ML in Banking",                  weightage: "Medium",  dependency: [] }
   ],
   "IT-C": [
-    { id: "T-IT-C1", name: "Cyber Incident Reporting & Response", weightage: "Critical", dependency: [] },
-    { id: "T-IT-C2", name: "Core Banking Security Architectures", weightage: "High", dependency: [] }
+    { id: "T-IT-C1",  name: "Cyber Incident Reporting & Response — RBI Framework",      weightage: "Critical", dependency: [] },
+    { id: "T-IT-C2",  name: "Core Banking Security Architectures & Access Controls",    weightage: "Critical", dependency: [] },
+    { id: "T-IT-C3",  name: "Network Security — Firewalls, IDS/IPS & Encryption",      weightage: "High",    dependency: [] },
+    { id: "T-IT-C4",  name: "Cyber Fraud Types — Phishing, Vishing, Malware, Ransomware", weightage: "Critical", dependency: [] },
+    { id: "T-IT-C5",  name: "Data Protection — PDPB, GDPR Basics & Data Localisation",  weightage: "High",    dependency: [] },
+    { id: "T-IT-C6",  name: "SOC, SIEM & Security Monitoring in Banks",                 weightage: "Medium",  dependency: [] }
+  ],
+  "IT-D": [
+    { id: "T-IT-D1",  name: "Big Data Analytics & Data Warehousing in Banking",         weightage: "Medium",  dependency: [] },
+    { id: "T-IT-D2",  name: "Customer Analytics — Segmentation, Churn & CLV",           weightage: "Medium",  dependency: [] },
+    { id: "T-IT-D3",  name: "Regtech, Suptech & Regulatory Reporting Automation",       weightage: "Medium",  dependency: [] },
+    { id: "T-IT-D4",  name: "Digital Lending, Account Aggregator & ONDC",               weightage: "High",    dependency: [] },
+    { id: "T-IT-D5",  name: "Central Bank Digital Currency (CBDC) & e-Rupee",           weightage: "High",    dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  HR Management (Elective)
+  // ════════════════════════════════════════════════════════
+  "HR-A": [
+    { id: "T-HR-A1",  name: "HRM — Evolution, Scope & Strategic HRM",                  weightage: "Medium",  dependency: [] },
+    { id: "T-HR-A2",  name: "HR Planning, Forecasting & Talent Pipeline",              weightage: "Medium",  dependency: [] },
+    { id: "T-HR-A3",  name: "Job Analysis, Job Description & Person Specification",    weightage: "Low",     dependency: [] },
+    { id: "T-HR-A4",  name: "Recruitment, Selection & Assessment Methods",             weightage: "Medium",  dependency: [] },
+    { id: "T-HR-A5",  name: "Induction, Probation & Placement in Banks",               weightage: "Low",     dependency: [] },
+    { id: "T-HR-A6",  name: "Employee Engagement, Retention & Attrition Management",   weightage: "Medium",  dependency: [] }
+  ],
+  "HR-B": [
+    { id: "T-HR-B1",  name: "Training Methods — On-job, Off-job, CBT, e-Learning",     weightage: "Medium",  dependency: [] },
+    { id: "T-HR-B2",  name: "Training Need Analysis (TNA) & Training Design",          weightage: "Medium",  dependency: [] },
+    { id: "T-HR-B3",  name: "Training Evaluation — Kirkpatrick & ROI of Training",     weightage: "High",    dependency: ["T-HR-B2"] },
+    { id: "T-HR-B4",  name: "Career Planning, Succession Planning & Talent Mgmt",      weightage: "Medium",  dependency: [] },
+    { id: "T-HR-B5",  name: "Mentoring, Coaching & Executive Development",             weightage: "Low",     dependency: [] },
+    { id: "T-HR-B6",  name: "Knowledge Management & Learning Organisations",           weightage: "Low",     dependency: [] }
   ],
   "HR-C": [
-    { id: "HR-C1", name: "Performance Management Systems (PMS)", weightage: "Medium", dependency: [] },
-    { id: "HR-C2", name: "Compensation Structure & Stock Options", weightage: "Low", dependency: [] }
+    { id: "HR-C1",    name: "Performance Management Systems (PMS) — ACR to BSC",       weightage: "High",    dependency: [] },
+    { id: "HR-C2",    name: "Compensation Structure, CTC & Stock Options (ESOPs)",      weightage: "High",    dependency: [] },
+    { id: "T-HR-C3",  name: "Pay Revision in PSBs — Bipartite Settlements & IBA",      weightage: "High",    dependency: [] },
+    { id: "T-HR-C4",  name: "Employee Benefits — PF, Gratuity, Pension & Leave",       weightage: "High",    dependency: [] },
+    { id: "T-HR-C5",  name: "360-Degree Feedback, MBO & Performance Calibration",      weightage: "Medium",  dependency: ["HR-C1"] },
+    { id: "T-HR-C6",  name: "Reward Management — Incentives, Recognition & ESOPs",     weightage: "Medium",  dependency: [] }
+  ],
+  "HR-D": [
+    { id: "T-HR-D1",  name: "Industrial Relations — Concept, Actors & IR Climate",     weightage: "High",    dependency: [] },
+    { id: "T-HR-D2",  name: "Trade Unions — Registration, Rights & Recognition",       weightage: "High",    dependency: ["T-HR-D1"] },
+    { id: "T-HR-D3",  name: "Industrial Disputes Act 1947 — Disputes & Adjudication",  weightage: "Critical", dependency: ["T-HR-D2"] },
+    { id: "T-HR-D4",  name: "Collective Bargaining, Conciliation & Arbitration",       weightage: "High",    dependency: ["T-HR-D3"] },
+    { id: "T-HR-D5",  name: "Grievance Handling Procedure & Domestic Enquiry",         weightage: "High",    dependency: [] },
+    { id: "T-HR-D6",  name: "Disciplinary Action — Principles of Natural Justice",     weightage: "Critical", dependency: ["T-HR-D5"] },
+    { id: "T-HR-D7",  name: "Standing Orders & Service Rules in Banks",                weightage: "High",    dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  Rural Banking (Elective)
+  // ════════════════════════════════════════════════════════
+  "Rural-A": [
+    { id: "T-Rural-A1", name: "Rural India — Socio-economic Profile & Demographics",   weightage: "Medium",  dependency: [] },
+    { id: "T-Rural-A2", name: "Indian Agricultural Sector — Structure & Challenges",   weightage: "High",    dependency: [] },
+    { id: "T-Rural-A3", name: "Rural Credit Markets — Formal vs. Informal Sources",    weightage: "High",    dependency: [] },
+    { id: "T-Rural-A4", name: "Rural Infrastructure — Roads, Power, Water & Digital",  weightage: "Low",     dependency: [] },
+    { id: "T-Rural-A5", name: "NABARD — Role, Functions & Refinance Programmes",       weightage: "Critical", dependency: [] },
+    { id: "T-Rural-A6", name: "Regional Rural Banks (RRBs) — Structure & Performance", weightage: "High",    dependency: [] }
+  ],
+  "Rural-B": [
+    { id: "T-Rural-B1", name: "Agricultural Finance — Crop Loans, KCC & Scale of Finance", weightage: "Critical", dependency: [] },
+    { id: "T-Rural-B2", name: "Land Development & Farm Mechanisation Finance",          weightage: "High",    dependency: [] },
+    { id: "T-Rural-B3", name: "SHG-Bank Linkage Programme & Microfinance",             weightage: "Critical", dependency: [] },
+    { id: "T-Rural-B4", name: "Warehousing, Pledge Finance & Commodity Loans",         weightage: "High",    dependency: [] },
+    { id: "T-Rural-B5", name: "Rural Housing Finance & PMAY-G",                        weightage: "Medium",  dependency: [] },
+    { id: "T-Rural-B6", name: "MSME & Allied Activities in Rural Areas",               weightage: "Medium",  dependency: [] }
+  ],
+  "Rural-C": [
+    { id: "T-Rural-C1", name: "Priority Sector Lending — Targets, Sub-targets & Reporting", weightage: "Critical", dependency: [] },
+    { id: "T-Rural-C2", name: "Government Rural Schemes — PM-KISAN, MGNREGS, PMJDY",  weightage: "High",    dependency: [] },
+    { id: "T-Rural-C3", name: "RIDF & Shortfall in PSL — NABARD & SIDBI Contributions", weightage: "High",   dependency: ["T-Rural-C1"] },
+    { id: "T-Rural-C4", name: "Financial Inclusion — BC Model, Jan Dhan & DBT",        weightage: "Critical", dependency: [] },
+    { id: "T-Rural-C5", name: "Insurance for Agriculture — PMFBY & Weather-based Crop Insurance", weightage: "High", dependency: [] },
+    { id: "T-Rural-C6", name: "Interest Subvention Scheme on Agricultural Loans",      weightage: "High",    dependency: ["T-Rural-B1"] }
+  ],
+  "Rural-D": [
+    { id: "T-Rural-D1", name: "Challenges in Agricultural Lending — NPA & Recovery",   weightage: "High",    dependency: [] },
+    { id: "T-Rural-D2", name: "Digital Financial Services in Rural Banking",            weightage: "High",    dependency: [] },
+    { id: "T-Rural-D3", name: "Cooperative Banks & PACS — Structure & Reforms",        weightage: "Medium",  dependency: [] },
+    { id: "T-Rural-D4", name: "Agri Value Chain Finance & Warehouse Receipt System",   weightage: "Medium",  dependency: [] },
+    { id: "T-Rural-D5", name: "Rural Development Schemes — PMEGP, MUDRA & PM SVANidhi", weightage: "High",  dependency: [] }
+  ],
+
+  // ════════════════════════════════════════════════════════
+  //  Central Banking (Elective)
+  // ════════════════════════════════════════════════════════
+  "Central-A": [
+    { id: "T-Central-A1", name: "Rationale & Functions of a Central Bank",             weightage: "Medium",  dependency: [] },
+    { id: "T-Central-A2", name: "History & Evolution of RBI (1935 onwards)",           weightage: "Low",     dependency: [] },
+    { id: "T-Central-A3", name: "Objectives of Monetary Policy — Price Stability & Growth", weightage: "High", dependency: [] },
+    { id: "T-Central-A4", name: "Currency Issuance — Minimum Reserve System & Notes", weightage: "Medium",  dependency: [] },
+    { id: "T-Central-A5", name: "Banker's Bank & Lender of Last Resort (LOLR)",        weightage: "High",    dependency: [] },
+    { id: "T-Central-A6", name: "Government's Banker — Debt Mgmt, WAM & PDMA",        weightage: "Medium",  dependency: [] }
+  ],
+  "Central-B": [
+    { id: "T-Central-B1", name: "RBI Organisational Structure & Departments",          weightage: "Low",     dependency: [] },
+    { id: "T-Central-B2", name: "Monetary Policy Committee (MPC) — Composition & Mandate", weightage: "Critical", dependency: [] },
+    { id: "T-Central-B3", name: "RBI as Regulator — Licensing, Supervision & Inspection", weightage: "High",  dependency: [] },
+    { id: "T-Central-B4", name: "Financial Stability & Macroprudential Framework",    weightage: "High",    dependency: [] },
+    { id: "T-Central-B5", name: "Payment System Regulation & DPSS",                   weightage: "High",    dependency: [] },
+    { id: "T-Central-B6", name: "Consumer Protection & Banking Ombudsman (RBI's Role)", weightage: "Medium", dependency: [] }
+  ],
+  "Central-C": [
+    { id: "T-Central-C1", name: "Monetary Policy Instruments — CRR, SLR, Repo, MSF",  weightage: "Critical", dependency: [] },
+    { id: "T-Central-C2", name: "Liquidity Adjustment Facility (LAF) — Corridor & Operations", weightage: "Critical", dependency: ["T-Central-C1"] },
+    { id: "T-Central-C3", name: "Open Market Operations (OMO) & G-SAP",               weightage: "High",    dependency: ["T-Central-C2"] },
+    { id: "T-Central-C4", name: "Flexible Inflation Targeting (FIT) Framework",        weightage: "Critical", dependency: [] },
+    { id: "T-Central-C5", name: "Credit Policy — Priority Sector & Sectoral Directives", weightage: "High",  dependency: [] },
+    { id: "T-Central-C6", name: "Transmission Mechanism of Monetary Policy",           weightage: "High",    dependency: ["T-Central-C1"] }
+  ],
+  "Central-D": [
+    { id: "T-Central-D1", name: "Foreign Exchange Reserves — Composition & Management", weightage: "High",   dependency: [] },
+    { id: "T-Central-D2", name: "RBI's Forex Intervention — Tools & Rationale",         weightage: "High",   dependency: ["T-Central-D1"] },
+    { id: "T-Central-D3", name: "External Commercial Borrowings (ECB) Policy",          weightage: "High",   dependency: [] },
+    { id: "T-Central-D4", name: "Capital Account Convertibility — Current Status",      weightage: "Medium", dependency: [] },
+    { id: "T-Central-D5", name: "SDRs, IMF Quota & India's International Commitments", weightage: "Medium",  dependency: [] }
+  ],
+  "Central-E": [
+    { id: "T-Central-E1", name: "Risk-Based Supervision (RBS) Framework",              weightage: "Critical", dependency: [] },
+    { id: "T-Central-E2", name: "Prompt Corrective Action (PCA) — Triggers & Restrictions", weightage: "Critical", dependency: [] },
+    { id: "T-Central-E3", name: "Basel III Implementation in India — RBI Roadmap",     weightage: "High",    dependency: [] },
+    { id: "T-Central-E4", name: "Bank Licensing — Universal, Differentiated & SFBs",  weightage: "High",    dependency: [] },
+    { id: "T-Central-E5", name: "Annual Inspection & CAMEL Rating Methodology",        weightage: "Medium",  dependency: [] }
+  ],
+  "Central-F": [
+    { id: "T-Central-F1", name: "NBFCs — Categories, Regulation & Scale-based Framework", weightage: "Critical", dependency: [] },
+    { id: "T-Central-F2", name: "Primary Dealers (PDs) — Role in G-Sec Markets",       weightage: "High",    dependency: [] },
+    { id: "T-Central-F3", name: "Systemically Important NBFCs (NBFC-ND-SI) — Prudential Norms", weightage: "High", dependency: ["T-Central-F1"] },
+    { id: "T-Central-F4", name: "Housing Finance Companies (HFCs) — NHB & RBI Overlap", weightage: "Medium", dependency: [] }
   ]
+
 };
 
 // Seed database with pre-built microlessons corresponding to topics
