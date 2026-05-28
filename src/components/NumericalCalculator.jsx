@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Delete, X } from "lucide-react";
+import { C } from "../theme";
 
 export default function NumericalCalculator({ onClose }) {
   const [display, setDisplay] = useState("0");
@@ -8,13 +9,8 @@ export default function NumericalCalculator({ onClose }) {
   const [clearOnNext, setClearOnNext] = useState(false);
   const [memory, setMemory] = useState(0);
 
-  const C = {
-    bg: "#070F1C", surf: "#0B1929", card: "#0F2240", cardAlt: "#0D1E38",
-    border: "#1B3454", accent: "#E9A020", text: "#EDF2F8", muted: "#7890A8",
-  };
-
   const handleDigit = (digit) => {
-    if (display === "0" || clearOnNext) {
+    if (display === "0" || display === "Error" || clearOnNext) {
       setDisplay(digit);
       setClearOnNext(false);
     } else {
@@ -24,11 +20,12 @@ export default function NumericalCalculator({ onClose }) {
   };
 
   const handleOp = (op) => {
+    if (display === "Error") { handleClear(); return; }
     const val = parseFloat(display);
     if (operation && prevVal !== null && !clearOnNext) {
       const result = calculate(prevVal, val, operation);
       setDisplay(String(result));
-      setPrevVal(result);
+      setPrevVal(result === "Error" ? null : result);
     } else {
       setPrevVal(val);
     }
@@ -41,16 +38,17 @@ export default function NumericalCalculator({ onClose }) {
       case "+": return a + b;
       case "-": return a - b;
       case "×": return a * b;
-      case "÷": return b !== 0 ? a / b : 0;
+      case "÷": return b !== 0 ? a / b : "Error";
       default: return b;
     }
   };
 
   const handleEqual = () => {
     if (!operation || prevVal === null) return;
+    if (display === "Error") { handleClear(); return; }
     const val = parseFloat(display);
     const result = calculate(prevVal, val, operation);
-    setDisplay(String(parseFloat(result.toFixed(6))));
+    setDisplay(result === "Error" ? "Error" : String(parseFloat(result.toFixed(6))));
     setPrevVal(null);
     setOperation(null);
     setClearOnNext(true);

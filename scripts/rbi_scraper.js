@@ -1,4 +1,5 @@
 // RBI Notifications Scraper & Ingestion Script
+// Node.js only — run via: node scripts/rbi_scraper.js
 // Utilizes Axios for requests, Cheerio for DOM parsing, and Gemini API for LLM classification.
 
 import axios from "axios";
@@ -6,7 +7,7 @@ import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
 
-// Load environment API key or standard stub
+// Load environment API key — never hard-code credentials here.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const RBI_NOTIFICATIONS_URL = "https://rbi.org.in/Scripts/Notifications.aspx";
 
@@ -27,6 +28,8 @@ const TOPIC_KEYWORD_MAP = [
   { keyword: "monetary policy", topicId: "T-Central-C1", subjectId: "Central" }
 ];
 
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+
 async function scrapeRBIPage() {
   console.log(`[Scraper] Fetching RBI Notifications Page: ${RBI_NOTIFICATIONS_URL}`);
   try {
@@ -40,10 +43,8 @@ async function scrapeRBIPage() {
     const updates = [];
 
     // Select notification row containers
-    // Note: RBI website typically nests rows under specific table classes depending on standard templates
     $("table.tablebg tr, table.table-responsive tr").each((index, element) => {
-      // Skip table header
-      if (index === 0) return;
+      if (index === 0) return; // skip header
 
       const dateText = $(element).find("td.griddate, td:nth-child(1)").text().trim();
       const titleLink = $(element).find("a[href*='Notification']");
@@ -51,7 +52,6 @@ async function scrapeRBIPage() {
       const url = titleLink.attr("href");
 
       if (titleText && url) {
-        // Resolve absolute URL
         const absoluteUrl = url.startsWith("http") ? url : `https://rbi.org.in/Scripts/${url}`;
         updates.push({
           date: dateText,
@@ -79,11 +79,10 @@ function parseNotificationId(text) {
 async function classifyWithGemini(notification, apiKey) {
   if (!apiKey) {
     console.log(`[AI Pipeline] No API key detected. Running local rule-based topic matching for: ${notification.title}`);
-    
-    // Fallback: Perform local keyword search
+
     const lowerTitle = notification.title.toLowerCase();
     const match = TOPIC_KEYWORD_MAP.find(item => lowerTitle.includes(item.keyword)) || { topicId: null, subjectId: "BFM" };
-    
+
     return {
       id: notification.id,
       date: notification.date,
@@ -96,9 +95,8 @@ async function classifyWithGemini(notification, apiKey) {
     };
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
   const prompt = `You are a professional CAIIB exam coach. Classify the following RBI notification for bank students.
-  
+
   Notification Title: "${notification.title}"
   URL Reference: "${notification.url}"
   Date: "${notification.date}"
@@ -107,7 +105,7 @@ async function classifyWithGemini(notification, apiKey) {
   {
     "title": "A short, clear title capturing the essence of the update",
     "summary": "A concise, high-density summary explaining the changes, key targets, and compliance requirements in 3-4 bullet points (max 80 words)",
-    "relevance": 95, // Integer 0-100 indicating importance for CAIIB exams. High risk weights/ratios get >85.
+    "relevance": 95,
     "tag": "Subject name followed by specific module, e.g. BFM · Risk Management",
     "subjectId": "One of: ABM, BFM, ABFM, BRBL, IT, HR, Rural, Central",
     "topicId": "One of our database topic IDs. Choose: T-BFM-B1 (Basel), T-BFM-D1 (LCR), T-BFM-D3 (NSFR), T-ABM-C1 (Working Capital), T-ABM-C2 (NPAs), T-IT-C1 (Cyber), T-Rural-C1 (Priority Sector), T-Central-C1 (Monetary Policy). If not matching, use null."
@@ -115,10 +113,15 @@ async function classifyWithGemini(notification, apiKey) {
   Do not include markdown tags. Return raw JSON.`;
 
   try {
-    const res = await axios.post(url, {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" }
-    });
+    // API key transmitted via header — never appended to the URL.
+    const res = await axios.post(
+      GEMINI_ENDPOINT,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      },
+      { headers: { "x-goog-api-key": apiKey } }
+    );
 
     const jsonText = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
     const classified = JSON.parse(jsonText);

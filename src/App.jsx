@@ -9,6 +9,8 @@ import {
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
 import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
+import { C, font } from "./theme";
+import { getStoredApiKey, setStoredApiKey } from "./utils/keyStore";
 
 // Component imports
 import Onboarding from "./components/Onboarding";
@@ -16,17 +18,6 @@ import StudyPanel from "./components/StudyPanel";
 import RevisionInbox from "./components/RevisionInbox";
 import PassOptimizer from "./components/PassOptimizer";
 import Circulars from "./components/Circulars";
-
-/* ── Palette & Styles ─────────────────────────────────────── */
-const C = {
-  bg: "#070F1C", surf: "#0B1929", card: "#0F2240", cardAlt: "#0D1E38",
-  border: "#1B3454", accent: "#E9A020", accentL: "#FDD060",
-  teal: "#2DD4BF", blue: "#60A5FA", purple: "#A78BFA",
-  text: "#EDF2F8", muted: "#7890A8", dim: "#3A5570",
-  ok: "#4ADE80", warn: "#FB923C", err: "#F87171",
-};
-
-const font = "'DM Sans', system-ui, sans-serif";
 
 export default function App() {
   const [isOnboarded, setIsOnboarded] = useState(false);
@@ -43,7 +34,7 @@ export default function App() {
   const [dbSize, setDbSize] = useState("14 KB");
 
   // Gemini API states (Step 1 Roadmap)
-  const [apiKey, setApiKey] = useState(sessionStorage.getItem("gemini_api_key") || "");
+  const [apiKey, setApiKey] = useState(getStoredApiKey);
   const [apiStatus, setApiStatus] = useState("disconnected");
 
   useEffect(() => {
@@ -55,15 +46,15 @@ export default function App() {
     const verifyKey = async () => {
       setApiStatus("verifying");
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const res = await fetch(url, {
+        // Key is transmitted via request header — never embedded in the URL.
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
         });
         if (res.ok) {
           setApiStatus("active");
-          sessionStorage.setItem("gemini_api_key", apiKey);
+          setStoredApiKey(apiKey);
         } else {
           setApiStatus("error");
         }
@@ -113,12 +104,14 @@ export default function App() {
     if (lesson) {
       handleStartStudySession([lesson], energyMode);
     } else {
-      // Create a dummy lesson structured card if no pre-built one exists
+      // Scan the full topic graph — do not rely on current UI expansion state.
+      const allTopics = Object.values(TOPICS).flat();
+      const topic = allTopics.find(t => t.id === topicId);
       const dummyLesson = {
         id: `L-${topicId}`,
         topicId,
         subjectId: activeSubject,
-        title: TOPICS[expandedModule]?.find(t => t.id === topicId)?.name || "Syllabus Unit",
+        title: topic?.name || "Syllabus Unit",
         badge: "Auto Generated",
         steps: [
           {
@@ -394,7 +387,7 @@ export default function App() {
 
                   {/* Subject Pickers */}
                   <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 10, flexShrink: 0 }}>
-                    {SUBJECTS.concat(ELECTIVES.filter(e => e.id === (userProfile?.elective || "Risk"))).map(s => (
+                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => (
                       <button key={s.id} onClick={() => { setActiveSubject(s.id); setExpandedModule(`${s.id}-A`); }}
                         style={{
                           background: activeSubject === s.id ? s.color : C.card,

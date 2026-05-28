@@ -1,19 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { Play, Pause, Square, Volume2, FastForward } from "lucide-react";
+import { C } from "../theme";
 
 export default function AudioPlayer({ textToRead, title }) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [rate, setRate] = useState(1); // speed multiplier
+  const [rate, setRate] = useState(1);
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState("");
   const [showVoiceSelect, setShowVoiceSelect] = useState(false);
   const synthRef = useRef(window.speechSynthesis);
-
-  const C = {
-    bg: "#070F1C", surf: "#0B1929", card: "#0F2240", cardAlt: "#0D1E38",
-    border: "#1B3454", accent: "#E9A020", text: "#EDF2F8", muted: "#7890A8",
-    teal: "#2DD4BF"
-  };
+  // rateRef keeps the current rate readable inside closures without stale captures.
+  const rateRef = useRef(1);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -23,7 +20,7 @@ export default function AudioPlayer({ textToRead, title }) {
       setVoices(englishVoices);
 
       // Preferred voices: Google, Siri, Natural, or en-IN
-      const defaultVoice = 
+      const defaultVoice =
         englishVoices.find(v => v.name.toLowerCase().includes("natural")) ||
         englishVoices.find(v => v.name.toLowerCase().includes("google")) ||
         englishVoices.find(v => v.lang.includes("en-IN")) ||
@@ -53,6 +50,53 @@ export default function AudioPlayer({ textToRead, title }) {
     };
   }, []);
 
+  const startSpeech = (overrideVoiceName) => {
+    if (!synthRef.current) return;
+    synthRef.current.cancel();
+
+    // Clean characters and formatting
+    const cleanText = textToRead
+      .replace(/[#*`✓✅❌🏛️💧📊📈🔨🛡️🔍📢⚡📉💰📐⚖️💼📄🔑🔑]/g, "")
+      .replace(/₹/g, " Rupees ")
+      .replace(/Cr/g, " Crores ")
+      .replace(/\b(ALM|LCR|NSFR|CRAR|RWA|CET1|Ke|Rf|Rm|NPV|WACC|CAPM|DSCR|MPBF|NWC|DRT|SARFAESI|NPA|RBI|MSME|CBS|IT|PMS|HRM)\b/g, (match) => {
+        const dict = {
+          ALM: "A L M", LCR: "L C R", NSFR: "N S F R", CRAR: "C R A R", RWA: "Risk Weighted Assets",
+          CET1: "C E T 1", Ke: "Cost of Equity", Rf: "Risk free rate", Rm: "Market return",
+          NPV: "Net Present Value", WACC: "W A C C", CAPM: "Capital Asset Pricing Model",
+          DSCR: "Debt Service Coverage Ratio", MPBF: "Maximum Permissible Bank Finance",
+          NWC: "Net Working Capital", DRT: "Debt Recovery Tribunal",
+          SARFAESI: "Sarfayzi", NPA: "N P A", RBI: "R B I", MSME: "M S M E",
+          CBS: "Core Banking Solution", IT: "I T", PMS: "Performance Management System",
+          HRM: "H R M"
+        };
+        return dict[match] || match;
+      });
+
+    // Split text by punctuation marks to inject brief natural pauses
+    const sentences = [title, ...cleanText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0)];
+    const systemVoices = synthRef.current.getVoices();
+    const voiceName = overrideVoiceName ?? selectedVoice;
+    const activeVoice = systemVoices.find(v => v.name === voiceName);
+
+    sentences.forEach((sentence, idx) => {
+      const utterance = new SpeechSynthesisUtterance(sentence);
+      // Read rate from ref — always current even when called from a stale closure.
+      utterance.rate = rateRef.current;
+      utterance.pitch = 1.02;
+      if (activeVoice) utterance.voice = activeVoice;
+
+      if (idx === sentences.length - 1) {
+        utterance.onend = () => setIsPlaying(false);
+        utterance.onerror = () => setIsPlaying(false);
+      }
+
+      synthRef.current.speak(utterance);
+    });
+
+    setIsPlaying(true);
+  };
+
   const handlePlayPause = () => {
     if (!synthRef.current) return;
 
@@ -64,51 +108,7 @@ export default function AudioPlayer({ textToRead, title }) {
         synthRef.current.resume();
         setIsPlaying(true);
       } else {
-        synthRef.current.cancel();
-
-        // 1. Clean characters and formatting
-        const cleanText = textToRead
-          .replace(/[#*`✓✅❌🏛️💧📊📈🔨🛡️🔍📢⚡📉💰📐⚖️💼📄🔑🔑]/g, "")
-          .replace(/₹/g, " Rupees ")
-          .replace(/Cr/g, " Crores ")
-          .replace(/\b(ALM|LCR|NSFR|CRAR|RWA|CET1|Ke|Rf|Rm|NPV|WACC|CAPM|DSCR|MPBF|NWC|DRT|SARFAESI|NPA|RBI|MSME|CBS|IT|PMS|HRM)\b/g, (match) => {
-            // Expand standard acronyms so they are read out naturally
-            const dict = {
-              ALM: "A L M", LCR: "L C R", NSFR: "N S F R", CRAR: "C R A R", RWA: "Risk Weighted Assets",
-              CET1: "C E T 1", Ke: "Cost of Equity", Rf: "Risk free rate", Rm: "Market return",
-              NPV: "Net Present Value", WACC: "W A C C", CAPM: "Capital Asset Pricing Model",
-              DSCR: "Debt Service Coverage Ratio", MPBF: "Maximum Permissible Bank Finance",
-              NWC: "Net Working Capital", DRT: "Debt Recovery Tribunal",
-              SARFAESI: "Sarfayzi", NPA: "N P A", RBI: "R B I", MSME: "M S M E",
-              CBS: "Core Banking Solution", IT: "I T", PMS: "Performance Management System",
-              HRM: "H R M"
-            };
-            return dict[match] || match;
-          });
-
-        // 2. Split text by punctuation marks to inject brief natural pauses
-        const sentences = [title, ...cleanText.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 0)];
-        const systemVoices = synthRef.current.getVoices();
-        const activeVoice = systemVoices.find(v => v.name === selectedVoice);
-
-        sentences.forEach((sentence, idx) => {
-          const utterance = new SpeechSynthesisUtterance(sentence);
-          utterance.rate = rate;
-          // Set standard, slightly warmer pitch
-          utterance.pitch = 1.02;
-          if (activeVoice) {
-            utterance.voice = activeVoice;
-          }
-
-          if (idx === sentences.length - 1) {
-            utterance.onend = () => setIsPlaying(false);
-            utterance.onerror = () => setIsPlaying(false);
-          }
-
-          synthRef.current.speak(utterance);
-        });
-
-        setIsPlaying(true);
+        startSpeech();
       }
     }
   };
@@ -121,15 +121,15 @@ export default function AudioPlayer({ textToRead, title }) {
 
   const toggleRate = () => {
     const nextRates = { 1: 1.25, 1.25: 1.5, 1.5: 1.75, 1.75: 2, 2: 1 };
-    const newRate = nextRates[rate] || 1;
+    const newRate = nextRates[rateRef.current] || 1;
+    // Update ref synchronously so any immediate restart reads the new value.
+    rateRef.current = newRate;
     setRate(newRate);
 
     if (isPlaying) {
       synthRef.current.cancel();
-      // Brief timeout to let the cancellation clear before restarting
-      setTimeout(() => {
-        handlePlayPause();
-      }, 80);
+      // Small delay lets the synthesis engine fully clear before restarting.
+      setTimeout(() => startSpeech(), 80);
     }
   };
 
@@ -187,10 +187,11 @@ export default function AudioPlayer({ textToRead, title }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 4, background: C.card, borderRadius: 8, padding: 8, border: `1px solid ${C.border}` }}>
           <label style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Select Narrator Voice</label>
           <select value={selectedVoice} onChange={(e) => {
-            setSelectedVoice(e.target.value);
+            const newVoice = e.target.value;
+            setSelectedVoice(newVoice);
             if (isPlaying) {
               synthRef.current.cancel();
-              setTimeout(() => handlePlayPause(), 100);
+              setTimeout(() => startSpeech(newVoice), 100);
             }
           }}
             style={{

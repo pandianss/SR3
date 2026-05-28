@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { calculatePassProbability, analyzeMistakePatterns, generateStudySchedule } from "../utils/aiOrchestrator";
 import { TrendingUp, AlertTriangle, Lightbulb, Play, Settings } from "lucide-react";
+import { C } from "../theme";
 
 export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective, apiKey }) {
-  const [studyAdjust, setStudyAdjust] = useState(0); // slider adjustment hours
+  const [studyAdjust, setStudyAdjust] = useState(0);
   const [data, setData] = useState({
     probability: 50,
     statusText: "",
@@ -15,14 +16,8 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
   const [weaknesses, setWeaknesses] = useState([]);
   const [aiAdvisory, setAiAdvisory] = useState("");
   const [loadingAdvisory, setLoadingAdvisory] = useState(false);
-
-  const C = {
-    bg: "#070F1C", surf: "#0B1929", card: "#0F2240", cardAlt: "#0D1E38",
-    border: "#1B3454", accent: "#E9A020", accentL: "#FDD060",
-    teal: "#2DD4BF", blue: "#60A5FA", purple: "#A78BFA",
-    text: "#EDF2F8", muted: "#7890A8", dim: "#3A5570",
-    ok: "#4ADE80", warn: "#FB923C", err: "#F87171",
-  };
+  // Ref used to debounce Gemini advisory calls while the slider is moving.
+  const advisoryTimerRef = useRef(null);
 
   useEffect(() => {
     const res = calculatePassProbability(userProfile, studyAdjust);
@@ -30,8 +25,14 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
     setWeaknesses(analyzeMistakePatterns());
   }, [userProfile, studyAdjust, activeElective]);
 
+  // Debounce advisory generation — fires 400ms after the last change, preventing
+  // a Gemini request on every individual slider tick.
   useEffect(() => {
-    const fetchAdvisory = async () => {
+    if (Object.keys(data.projectedScores).length === 0) return;
+
+    if (advisoryTimerRef.current) clearTimeout(advisoryTimerRef.current);
+
+    advisoryTimerRef.current = setTimeout(async () => {
       setLoadingAdvisory(true);
       try {
         const text = await generateStudySchedule(data.projectedScores, activeElective, apiKey);
@@ -40,11 +41,11 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
         setAiAdvisory("Failed to generate strategic advisory. Review projections manually.");
       }
       setLoadingAdvisory(false);
+    }, 400);
+
+    return () => {
+      if (advisoryTimerRef.current) clearTimeout(advisoryTimerRef.current);
     };
-    
-    if (Object.keys(data.projectedScores).length > 0) {
-      fetchAdvisory();
-    }
   }, [data.projectedScores, activeElective, apiKey]);
 
   const r = 58, circ = 2 * Math.PI * r;
@@ -94,7 +95,7 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
             </h3>
             <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
               <span style={{ fontSize: 11, color: data.subjectsBelow50.length > 0 ? C.err : C.ok, fontWeight: 600 }}>
-                {data.subjectsBelow50.length > 0 
+                {data.subjectsBelow50.length > 0
                   ? `${data.subjectsBelow50.length} Paper(s) below safety target`
                   : "All papers cleared!"}
               </span>

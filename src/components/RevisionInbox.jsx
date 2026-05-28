@@ -2,19 +2,12 @@ import { useState, useEffect } from "react";
 import { getRevisionQueue, getMemoryStrengthStats, getAllCardStates } from "../utils/spacedRepetition";
 import { MICRO_LESSONS, FORMULAS } from "../data/contentGraph";
 import { BookOpen, FlaskConical, Play, CheckCircle, RefreshCcw, Brain, Award } from "lucide-react";
+import { C } from "../theme";
 
 export default function RevisionInbox({ onStartRevision, activeElective }) {
   const [queue, setQueue] = useState({ dueLessons: [], dueFormulas: [] });
   const [stats, setStats] = useState({ mastered: 0, reviewing: 0, forgotten: 0, unreviewed: 0, retentionRate: 0 });
   const [filter, setFilter] = useState("all"); // all, lessons, formulas
-
-  const C = {
-    bg: "#070F1C", surf: "#0B1929", card: "#0F2240", cardAlt: "#0D1E38",
-    border: "#1B3454", accent: "#E9A020", accentL: "#FDD060",
-    teal: "#2DD4BF", blue: "#60A5FA", purple: "#A78BFA",
-    text: "#EDF2F8", muted: "#7890A8", dim: "#3A5570",
-    ok: "#4ADE80", warn: "#FB923C", err: "#F87171",
-  };
 
   useEffect(() => {
     // Filter down to syllabus content matching active elective (or core)
