@@ -8,9 +8,12 @@ export default function AudioPlayer({ textToRead, title }) {
   const [voices, setVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState("");
   const [showVoiceSelect, setShowVoiceSelect] = useState(false);
-  const synthRef = useRef(window.speechSynthesis);
+  // Guard: speechSynthesis may not exist in non-browser environments.
+  const synthRef = useRef(typeof window !== "undefined" ? window.speechSynthesis : null);
   // rateRef keeps the current rate readable inside closures without stale captures.
   const rateRef = useRef(1);
+  // Pre-generate stable animation durations so the waveform doesn't flicker on re-render.
+  const waveDurations = useRef([...Array(12)].map(() => `${(0.5 + Math.random() * 0.5).toFixed(2)}s`));
 
   useEffect(() => {
     const loadVoices = () => {
@@ -211,16 +214,15 @@ export default function AudioPlayer({ textToRead, title }) {
       {/* Animated Waveform */}
       {isPlaying && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, height: 16 }}>
-          {[...Array(12)].map((_, i) => {
+        {[...Array(12)].map((_, i) => {
             const delay = `${i * 0.1}s`;
-            const duration = `${0.5 + Math.random() * 0.5}s`;
             return (
               <div key={i}
                 style={{
                   width: 3,
                   background: C.teal,
                   borderRadius: 1.5,
-                  animation: `audioWave ${duration} ease-in-out ${delay} infinite alternate`,
+                  animation: `audioWave ${waveDurations.current[i]} ease-in-out ${delay} infinite alternate`,
                   height: 4
                 }}
               />

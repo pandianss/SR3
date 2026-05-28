@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { getRevisionQueue, getMemoryStrengthStats, getAllCardStates } from "../utils/spacedRepetition";
 import { MICRO_LESSONS, FORMULAS } from "../data/contentGraph";
 import { BookOpen, FlaskConical, Play, CheckCircle, RefreshCcw, Brain, Award } from "lucide-react";
-import { C } from "../theme";
+import { C, getSubColor } from "../theme";
 
 export default function RevisionInbox({ onStartRevision, activeElective }) {
   const [queue, setQueue] = useState({ dueLessons: [], dueFormulas: [] });
@@ -28,13 +28,9 @@ export default function RevisionInbox({ onStartRevision, activeElective }) {
     onStartRevision(queue.dueLessons, queue.dueFormulas);
   };
 
-  const getSubColor = (sub) => {
-    if (sub === "ABM") return C.teal;
-    if (sub === "BFM") return C.blue;
-    if (sub === "ABFM") return C.warn;
-    if (sub === "BRBL") return C.purple;
-    return C.accent; // elective
-  };
+  // Launch just the single clicked item rather than the whole due batch.
+  const handleStartSingleLesson = (lesson) => onStartRevision([lesson], []);
+  const handleStartSingleFormula = (formula) => onStartRevision([], [formula]);
 
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 0" }}>
@@ -121,7 +117,7 @@ export default function RevisionInbox({ onStartRevision, activeElective }) {
           <>
             {/* Lessons Section */}
             {(filter === "all" || filter === "lessons") && queue.dueLessons.map(lesson => (
-              <button key={lesson.id} onClick={handleStartReview}
+              <button key={lesson.id} onClick={() => handleStartSingleLesson(lesson)}
                 style={{
                   background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12,
                   padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,
@@ -146,7 +142,7 @@ export default function RevisionInbox({ onStartRevision, activeElective }) {
 
             {/* Formulas Section */}
             {(filter === "all" || filter === "formulas") && queue.dueFormulas.map(formula => (
-              <button key={formula.id} onClick={handleStartReview}
+              <button key={formula.id} onClick={() => handleStartSingleFormula(formula)}
                 style={{
                   background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12,
                   padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,

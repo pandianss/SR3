@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { calculatePassProbability, analyzeMistakePatterns, generateStudySchedule } from "../utils/aiOrchestrator";
 import { TrendingUp, AlertTriangle, Lightbulb, Play, Settings } from "lucide-react";
-import { C } from "../theme";
+import { C, getSubColor } from "../theme";
 
 export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective, apiKey }) {
   const [studyAdjust, setStudyAdjust] = useState(0);
@@ -28,14 +28,16 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
   // Debounce advisory generation — fires 400ms after the last change, preventing
   // a Gemini request on every individual slider tick.
   useEffect(() => {
-    if (Object.keys(data.projectedScores).length === 0) return;
+    const scores = data.projectedScores;
+    // Don't fire on the initial render before any scores exist.
+    if (Object.keys(scores).length === 0) return;
 
     if (advisoryTimerRef.current) clearTimeout(advisoryTimerRef.current);
 
     advisoryTimerRef.current = setTimeout(async () => {
       setLoadingAdvisory(true);
       try {
-        const text = await generateStudySchedule(data.projectedScores, activeElective, apiKey);
+        const text = await generateStudySchedule(scores, activeElective, apiKey);
         setAiAdvisory(text);
       } catch (e) {
         setAiAdvisory("Failed to generate strategic advisory. Review projections manually.");
@@ -50,14 +52,6 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
 
   const r = 58, circ = 2 * Math.PI * r;
   const offset = circ * (1 - data.probability / 100);
-
-  const getSubColor = (sub) => {
-    if (sub === "ABM") return C.teal;
-    if (sub === "BFM") return C.blue;
-    if (sub === "ABFM") return C.warn;
-    if (sub === "BRBL") return C.purple;
-    return C.accent;
-  };
 
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 0" }}>

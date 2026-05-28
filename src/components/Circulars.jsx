@@ -1,15 +1,26 @@
 import { useState } from "react";
 import { RBI_CIRCULARS } from "../data/contentGraph";
+import ingestedCirculars from "../data/ingestedCirculars.json";
 import { AlertCircle, Calendar, Bookmark, Link, Search } from "lucide-react";
 import { C } from "../theme";
 
+// Merge ingested (live) circulars with the static fallback set.
+// Ingested items take priority; static items fill any gaps.
+const seenIds = new Set(ingestedCirculars.map(c => c.id));
+const ALL_CIRCULARS = [
+  ...ingestedCirculars,
+  ...RBI_CIRCULARS.filter(c => !seenIds.has(c.id))
+];
+
 export default function Circulars({ onNavigateToLesson }) {
   const [selectedSub, setSelectedSub] = useState("All");
-  const subjects = ["All", "BFM", "ABM", "IT"];
+  // Derive filter tabs from actual data so they stay in sync automatically.
+  const subjects = ["All", ...new Set(ALL_CIRCULARS.map(c => c.subjectId))];
 
   const filtered = selectedSub === "All"
-    ? RBI_CIRCULARS
-    : RBI_CIRCULARS.filter(c => c.subjectId === selectedSub);
+    ? ALL_CIRCULARS
+    : ALL_CIRCULARS.filter(c => c.subjectId === selectedSub);
+
 
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 0" }}>

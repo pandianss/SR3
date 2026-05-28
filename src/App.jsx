@@ -3,7 +3,8 @@ import {
   BookOpen, Brain, Zap, Clock, TrendingUp, Home,
   BarChart2, FlaskConical, Play, AlertTriangle,
   RotateCcw, Target, Battery, ChevronRight, Star,
-  BookMarked, Shield, FileText, RefreshCw, WifiOff
+  BookMarked, Shield, FileText, RefreshCw, WifiOff,
+  Settings, X, KeyRound
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
@@ -23,17 +24,20 @@ export default function App() {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [tab, setTab] = useState("home");
-  
+
   // Study session states
   const [sessionQueue, setSessionQueue] = useState([]);
-  const [energyMode, setEnergyMode] = useState("low"); // low, focus, rapid
-  
+  const [energyMode, setEnergyMode] = useState("low");
+
   // Offline sync indicator states
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState("Just now");
   const [dbSize, setDbSize] = useState("14 KB");
 
-  // Gemini API states (Step 1 Roadmap)
+  // Settings drawer
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Gemini API states
   const [apiKey, setApiKey] = useState(getStoredApiKey);
   const [apiStatus, setApiStatus] = useState("disconnected");
 
@@ -42,32 +46,23 @@ export default function App() {
       setApiStatus("disconnected");
       return;
     }
-
     const verifyKey = async () => {
       setApiStatus("verifying");
       try {
-        // Key is transmitted via request header — never embedded in the URL.
         const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
         });
-        if (res.ok) {
-          setApiStatus("active");
-          setStoredApiKey(apiKey);
-        } else {
-          setApiStatus("error");
-        }
-      } catch (e) {
-        setApiStatus("error");
-      }
+        if (res.ok) { setApiStatus("active"); setStoredApiKey(apiKey); }
+        else setApiStatus("error");
+      } catch { setApiStatus("error"); }
     };
-
-    const timer = setTimeout(verifyKey, 500); // debounce API verification
+    const timer = setTimeout(verifyKey, 500);
     return () => clearTimeout(timer);
   }, [apiKey]);
 
-  // Active Subject selection in traversable syllabus map
+  // Active Subject selection
   const [activeSubject, setActiveSubject] = useState("BFM");
   const [expandedModule, setExpandedModule] = useState("BFM-B");
   const [selectedFormulaTab, setSelectedFormulaTab] = useState("All");
@@ -75,20 +70,19 @@ export default function App() {
   // Seed mock spaced repetition queue on launch
   useEffect(() => {
     seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
-    
     const onboarded = localStorage.getItem("caiib_onboarded") === "true";
     if (onboarded) {
       setIsOnboarded(true);
       const profile = localStorage.getItem("caiib_user_profile");
-      if (profile) {
-        setUserProfile(JSON.parse(profile));
-      }
+      if (profile) setUserProfile(JSON.parse(profile));
     }
   }, []);
 
   const handleOnboardingComplete = (profile) => {
     setUserProfile(profile);
     setIsOnboarded(true);
+    const profileToMode = { commute: "low", night: "focus", morning: "rapid" };
+    setEnergyMode(profileToMode[profile.energyProfile] || "low");
     setTab("home");
   };
 
@@ -98,36 +92,20 @@ export default function App() {
     setTab("study_session");
   };
 
-  // Launch a lesson for a specific topic
   const handleLaunchTopicLesson = (topicId) => {
     const lesson = MICRO_LESSONS.find(l => l.topicId === topicId);
     if (lesson) {
       handleStartStudySession([lesson], energyMode);
     } else {
-      // Scan the full topic graph — do not rely on current UI expansion state.
       const allTopics = Object.values(TOPICS).flat();
       const topic = allTopics.find(t => t.id === topicId);
       const dummyLesson = {
-        id: `L-${topicId}`,
-        topicId,
-        subjectId: activeSubject,
+        id: `L-${topicId}`, topicId, subjectId: activeSubject,
         title: topic?.name || "Syllabus Unit",
         badge: "Auto Generated",
         steps: [
-          {
-            kind: "concept",
-            title: "Core Concept",
-            body: "This unit covers specialized regulations, compliance benchmarks, and reporting standards under CAIIB statutory guidelines.",
-            highlight: "Review linked RBI master directives for circular overlaps."
-          },
-          {
-            kind: "pillars",
-            title: "Regulatory Pillars",
-            pillars: [
-              { e: "📑", n: "Pillar A", d: "Standard operational audits & reporting guidelines." },
-              { e: "🛡️", n: "Pillar B", d: "Supervisory risk indicators and reserve ratios." }
-            ]
-          }
+          { kind: "concept", title: "Core Concept", body: "This unit covers specialized regulations, compliance benchmarks, and reporting standards under CAIIB statutory guidelines.", highlight: "Review linked RBI master directives for circular overlaps." },
+          { kind: "pillars", title: "Regulatory Pillars", pillars: [{ e: "📑", n: "Pillar A", d: "Standard operational audits & reporting guidelines." }, { e: "🛡️", n: "Pillar B", d: "Supervisory risk indicators and reserve ratios." }] }
         ]
       };
       handleStartStudySession([dummyLesson], energyMode);
@@ -140,7 +118,6 @@ export default function App() {
       setIsSyncing(false);
       const now = new Date();
       setLastSyncTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`);
-      // calculate size based on localStorage length
       const len = JSON.stringify(localStorage).length;
       setDbSize(`${(len / 1024).toFixed(1)} KB`);
     }, 800);
@@ -152,19 +129,23 @@ export default function App() {
       setIsOnboarded(false);
       setUserProfile(null);
       setTab("home");
-      window.location.reload();
+      setApiKey("");
+      setApiStatus("disconnected");
+      setSessionQueue([]);
+      setEnergyMode("low");
+      setShowSettings(false);
     }
   };
 
-  // Pass Probability computation
   const passStats = calculatePassProbability(userProfile, 0);
 
+  const roleLabel = userProfile?.role === "credit" ? "Credit Officer"
+    : userProfile?.role === "treasury" ? "Treasury Officer"
+    : userProfile?.role === "branch" ? "Branch Manager"
+    : "Banker";
+
   return (
-    <div style={{
-      fontFamily: font, background: "#030810",
-      minHeight: "100vh", display: "flex", alignItems: "center",
-      justifyContent: "center", padding: 24, position: "relative"
-    }}>
+    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -172,102 +153,100 @@ export default function App() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #1B3454; border-radius: 99px; }
         button { font-family: inherit; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .spin-animate { animation: spin 0.8s linear infinite; }
       `}</style>
 
-      {/* Control Panel */}
-      <div style={{
-        position: "fixed", top: 20, left: 30, display: "flex", flexDirection: "column", gap: 10,
-        color: C.muted, fontSize: 11, maxWidth: 220
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, color: C.accent, fontWeight: 700, letterSpacing: "0.05em" }}>
-          <Shield size={14} />
-          <span>CAIIB COGNITIVE SYSTEM</span>
-        </div>
-        <p style={{ color: C.dim, fontSize: 10, lineHeight: 1.4 }}>
-          Fatigue-aware, spaced-repetition mobile application prototype.
-        </p>
+      {/* App Shell — max width keeps it comfortable on desktop */}
+      <div style={{ width: "100%", maxWidth: 480, minHeight: "100vh", display: "flex", flexDirection: "column", background: C.surf, position: "relative" }}>
 
-        {/* Gemini API Input Panel */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: 8 }}>
-          <label style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Gemini API Key</label>
-          <input type="password" placeholder="AI API Key" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-            style={{
-              background: C.surf, border: `1px solid ${C.border}`, borderRadius: 4,
-              color: C.text, fontSize: 10, padding: "4px 6px", outline: "none", width: "100%"
-            }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
-            <div style={{
-              width: 6, height: 6, borderRadius: "50%",
-              background: apiStatus === "active" ? C.ok : apiStatus === "verifying" ? C.warn : apiStatus === "error" ? C.err : C.dim
-            }} />
-            <span style={{ fontSize: 9, color: C.muted, textTransform: "capitalize" }}>
-              {apiStatus === "active" ? "AI Live (Gemini Active)" : apiStatus === "verifying" ? "Verifying..." : apiStatus === "error" ? "Invalid Key" : "No Key (Local Fallback)"}
-            </span>
-          </div>
-        </div>
-
-        <button onClick={handleResetApp}
-          style={{
-            background: `${C.err}18`, border: `1px solid ${C.err}33`, color: C.err,
-            borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 10, fontWeight: 700, width: "fit-content"
+        {/* ── Top App Bar ── */}
+        {isOnboarded && tab !== "study_session" && (
+          <div style={{
+            background: C.surf, borderBottom: `1px solid ${C.border}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "12px 20px", flexShrink: 0, position: "sticky", top: 0, zIndex: 20
           }}>
-          Reset Database
-        </button>
-      </div>
-
-      {/* Phone Mockup Frame */}
-      <div style={{
-        width: 390, height: 840, background: C.surf,
-        borderRadius: 44, overflow: "hidden", position: "relative",
-        boxShadow: "0 60px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)",
-        display: "flex", flexDirection: "column"
-      }}>
-
-        {/* Status Bar */}
-        <div style={{
-          height: 44, background: C.surf, display: "flex",
-          alignItems: "center", justifyContent: "space-between",
-          padding: "0 28px", flexShrink: 0, zIndex: 10
-        }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>9:41</span>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 2, alignItems: "flex-end" }}>
-              {[7, 9, 11, 13].map((h, i) => (
-                <div key={i} style={{ width: 3, height: h, borderRadius: 1, background: i < 3 ? C.text : C.dim }} />
-              ))}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Shield size={16} color={C.accent} />
+              <span style={{ color: C.accent, fontWeight: 800, fontSize: 13, letterSpacing: "0.05em" }}>CAIIB</span>
+              <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
             </div>
-            <span style={{ color: C.text, fontSize: 12 }}>5G</span>
-            <div style={{ width: 24, height: 12, border: `1.5px solid ${C.text}`, borderRadius: 3, position: "relative" }}>
-              <div style={{ position: "absolute", right: -3, top: "50%", transform: "translateY(-50%)", width: 2, height: 6, background: C.text, borderRadius: "0 1px 1px 0" }} />
-              <div style={{ margin: 1.5, height: 7, width: "75%", background: C.ok, borderRadius: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Sync status */}
+              <button onClick={handleTriggerSync} disabled={isSyncing}
+                style={{ background: "none", border: "none", display: "flex", alignItems: "center", gap: 4, color: C.muted, fontSize: 10, cursor: "pointer", padding: 0 }}>
+                <RefreshCw size={12} className={isSyncing ? "spin-animate" : ""} color={C.teal} />
+                <span style={{ color: C.teal, fontSize: 10, fontWeight: 600 }}>{isSyncing ? "Syncing…" : `Sync: ${lastSyncTime}`}</span>
+              </button>
+              {/* Settings */}
+              <button onClick={() => setShowSettings(true)}
+                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <Settings size={15} color={C.muted} />
+              </button>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Simulated Offline-First Header Bar */}
-        <div style={{
-          background: C.cardAlt, borderBottom: `1.5px solid ${C.border}`, height: 28,
-          display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", flexShrink: 0
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <WifiOff size={11} color={C.teal} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: C.teal, letterSpacing: "0.03em" }}>Offline Mode Active</span>
-          </div>
-          <button onClick={handleTriggerSync} disabled={isSyncing}
-            style={{
-              background: "none", border: "none", display: "flex", alignItems: "center", gap: 4,
-              color: C.muted, fontSize: 9, cursor: "pointer", padding: 0
+        {/* ── Settings Drawer ── */}
+        {showSettings && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            {/* Backdrop */}
+            <div onClick={() => setShowSettings(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)" }} />
+            <div style={{
+              position: "relative", width: "100%", maxWidth: 480,
+              background: C.surf, borderRadius: "20px 20px 0 0",
+              border: `1px solid ${C.border}`, borderBottom: "none",
+              padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 16, zIndex: 1
             }}>
-            <RefreshCw size={9} className={isSyncing ? "spin-animate" : ""} style={{ color: C.muted }} />
-            <span>DB: {dbSize} · Sync: {lastSyncTime}</span>
-          </button>
-          <style>{`
-            @keyframes spin { 100% { transform: rotate(360deg); } }
-            .spin-animate { animation: spin 0.8s linear infinite; }
-          `}</style>
-        </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Settings</span>
+                <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}>
+                  <X size={20} />
+                </button>
+              </div>
 
-        {/* Active Screen Area */}
+              {/* API Key */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <KeyRound size={14} color={C.accent} />
+                  <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>Gemini API Key</span>
+                  <div style={{
+                    marginLeft: "auto", width: 8, height: 8, borderRadius: "50%",
+                    background: apiStatus === "active" ? C.ok : apiStatus === "verifying" ? C.warn : apiStatus === "error" ? C.err : C.dim
+                  }} />
+                  <span style={{ fontSize: 10, color: C.muted }}>
+                    {apiStatus === "active" ? "Live" : apiStatus === "verifying" ? "Checking…" : apiStatus === "error" ? "Invalid" : "Offline"}
+                  </span>
+                </div>
+                <input type="password" placeholder="Paste your Gemini API key" value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  style={{
+                    background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8,
+                    color: C.text, fontSize: 13, padding: "8px 10px", outline: "none", width: "100%"
+                  }} />
+                <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>Key sent via request header — never embedded in URLs. AI case studies and coaching activate when key is valid.</p>
+              </div>
+
+              {/* DB info */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
+                <span style={{ color: C.muted, fontSize: 12 }}>Local DB size</span>
+                <span style={{ color: C.text, fontWeight: 600, fontSize: 12 }}>{dbSize}</span>
+              </div>
+
+              {/* Reset */}
+              <button onClick={handleResetApp}
+                style={{
+                  background: `${C.err}18`, border: `1.5px solid ${C.err}44`, color: C.err,
+                  borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700
+                }}>
+                Reset All Progress & Onboarding
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Active Screen Area ── */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {!isOnboarded ? (
             <Onboarding onComplete={handleOnboardingComplete} />
@@ -278,12 +257,14 @@ export default function App() {
                 <div style={{ height: "100%", overflowY: "auto", padding: "20px 20px 0" }}>
                   {/* Greeting */}
                   <div style={{ marginBottom: 20 }}>
-                    <p style={{ color: C.muted, fontSize: 12, marginBottom: 2 }}>Welcome back, Banker 👋</p>
-                    <h1 style={{ color: C.text, fontSize: 20, fontWeight: 700, lineHeight: 1.2, margin: 0 }}>
+                    <p style={{ color: C.muted, fontSize: 12, marginBottom: 2 }}>
+                      Welcome back, {roleLabel} 👋
+                    </p>
+                    <h1 style={{ color: C.text, fontSize: 22, fontWeight: 800, lineHeight: 1.2, margin: 0 }}>
                       CAIIB Preparation Dashboard
                     </h1>
                     <p style={{ color: C.accent, fontSize: 12, marginTop: 4, fontWeight: 600 }}>
-                      🎯 Target Elective: {userProfile?.elective ? ELECTIVES.find(e=>e.id===userProfile.elective)?.name : "Risk Management"}
+                      🎯 Target Elective: {userProfile?.elective ? ELECTIVES.find(e => e.id === userProfile.elective)?.name : "Risk Management"}
                     </p>
                   </div>
 
@@ -306,10 +287,7 @@ export default function App() {
                             borderRadius: 12, padding: "12px 14px", cursor: "pointer",
                             display: "flex", alignItems: "center", gap: 12, textAlign: "left", transition: "all 0.2s"
                           }}>
-                          <div style={{
-                            width: 36, height: 36, borderRadius: 10, background: `${m.color}20`,
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
-                          }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${m.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             <m.Icon size={18} color={m.color} />
                           </div>
                           <div style={{ flex: 1, overflow: "hidden" }}>
@@ -322,14 +300,13 @@ export default function App() {
                               <div style={{ marginTop: 4 }}>
                                 <button onClick={(e) => {
                                   e.stopPropagation();
-                                  // Load micro lessons matching subject filter
-                                  const list = MICRO_LESSONS.filter(l => l.subjectId === "BFM" || l.subjectId === "ABM");
+                                  const list = MICRO_LESSONS.filter(l =>
+                                    l.subjectId === "BFM" || l.subjectId === "ABM" ||
+                                    (userProfile?.elective && l.subjectId === userProfile.elective)
+                                  );
                                   handleStartStudySession(list, m.id);
                                 }}
-                                  style={{
-                                    background: m.color, border: "none", borderRadius: 6,
-                                    color: "#000", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer"
-                                  }}>
+                                  style={{ background: m.color, border: "none", borderRadius: 6, color: "#000", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>
                                   Start →
                                 </button>
                               </div>
@@ -349,10 +326,7 @@ export default function App() {
                         <span style={{ fontSize: 9, background: `${C.blue}20`, color: C.blue, padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>BFM · Module B</span>
                       </div>
                       <button onClick={() => handleLaunchTopicLesson("T-BFM-B1")}
-                        style={{
-                          background: C.accent, border: "none", borderRadius: "50%",
-                          width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
-                        }}>
+                        style={{ background: C.accent, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <Play size={16} color="#000" fill="#000" style={{ marginLeft: 2 }} />
                       </button>
                     </div>
@@ -365,9 +339,7 @@ export default function App() {
                       padding: 14, marginBottom: 24, cursor: "pointer", display: "flex", alignItems: "center", gap: 12
                     }}>
                     <div style={{ flex: 1 }}>
-                      <p style={{ color: C.accent, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>
-                        Pass Probability Indicator
-                      </p>
+                      <p style={{ color: C.accent, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Pass Probability Indicator</p>
                       <p style={{ color: C.text, fontSize: 20, fontWeight: 800, margin: "2px 0" }}>
                         {passStats.probability}% <span style={{ color: passStats.statusColor, fontSize: 11, fontWeight: 600 }}>{passStats.statusText}</span>
                       </p>
@@ -406,48 +378,30 @@ export default function App() {
                       const isExpanded = expandedModule === m.id;
                       const topics = TOPICS[m.id] || [];
                       return (
-                        <div key={m.id} style={{
-                          background: C.card, border: `1.5px solid ${isExpanded ? C.border : "transparent"}`,
-                          borderRadius: 12, overflow: "hidden"
-                        }}>
+                        <div key={m.id} style={{ background: C.card, border: `1.5px solid ${isExpanded ? C.border : "transparent"}`, borderRadius: 12, overflow: "hidden" }}>
                           <button onClick={() => setExpandedModule(isExpanded ? null : m.id)}
-                            style={{
-                              width: "100%", background: "none", border: "none", padding: "12px 14px",
-                              display: "flex", justifyContent: "space-between", alignItems: "center",
-                              cursor: "pointer", textAlign: "left"
-                            }}>
+                            style={{ width: "100%", background: "none", border: "none", padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", textAlign: "left" }}>
                             <span style={{ color: C.text, fontSize: 13, fontWeight: 700 }}>{m.name}</span>
                             <span style={{ color: C.muted, fontSize: 11 }}>{isExpanded ? "▲" : "▼"}</span>
                           </button>
-
                           {isExpanded && (
                             <div style={{ padding: "0 14px 12px", display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                               {topics.length === 0 ? (
                                 <p style={{ color: C.muted, fontSize: 11, margin: 0 }}>No topics configured yet.</p>
                               ) : (
                                 topics.map(t => (
-                                  <div key={t.id} style={{
-                                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                                    background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px"
-                                  }}>
+                                  <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px" }}>
                                     <div style={{ overflow: "hidden", flex: 1 }}>
                                       <p style={{ color: C.text, fontSize: 12, fontWeight: 600, margin: 0, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{t.name}</p>
                                       <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 3 }}>
-                                        <span style={{
-                                          fontSize: 9, fontWeight: 700,
-                                          color: t.weightage === "Critical" ? C.err : t.weightage === "High" ? C.warn : C.teal
-                                        }}>{t.weightage} Weight</span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, color: t.weightage === "Critical" ? C.err : t.weightage === "High" ? C.warn : C.teal }}>{t.weightage} Weight</span>
                                         {t.dependency.length > 0 && (
                                           <span style={{ color: C.muted, fontSize: 9 }}>· Requires {t.dependency[0].replace("T-", "")}</span>
                                         )}
                                       </div>
                                     </div>
                                     <button onClick={() => handleLaunchTopicLesson(t.id)}
-                                      style={{
-                                        background: C.accent, border: "none", borderRadius: 6,
-                                        padding: "4px 10px", color: "#000", fontSize: 10, fontWeight: 700,
-                                        cursor: "pointer", marginLeft: 10, flexShrink: 0
-                                      }}>
+                                      style={{ background: C.accent, border: "none", borderRadius: 6, padding: "4px 10px", color: "#000", fontSize: 10, fontWeight: 700, cursor: "pointer", marginLeft: 10, flexShrink: 0 }}>
                                       Study
                                     </button>
                                   </div>
@@ -462,8 +416,6 @@ export default function App() {
                     {/* Formula sheet quick index */}
                     <div style={{ marginTop: 10, borderTop: `1.5px solid ${C.border}`, paddingTop: 14 }}>
                       <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", marginBottom: 10 }}>Formula Revision Index</p>
-                      
-                      {/* Filter */}
                       <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
                         {["All", "BFM", "ABM", "ABFM"].map(f => (
                           <button key={f} onClick={() => setSelectedFormulaTab(f)}
@@ -477,7 +429,6 @@ export default function App() {
                           </button>
                         ))}
                       </div>
-
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {FORMULAS.filter(f => selectedFormulaTab === "All" || f.sub === selectedFormulaTab).map(f => (
                           <div key={f.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10 }}>
@@ -494,7 +445,6 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-
                   </div>
                 </div>
               )}
@@ -519,9 +469,7 @@ export default function App() {
 
               {/* RBI CIRCULARS SCREEN */}
               {tab === "circulars" && (
-                <Circulars onNavigateToLesson={(topicId) => {
-                  handleLaunchTopicLesson(topicId);
-                }} />
+                <Circulars onNavigateToLesson={(topicId) => handleLaunchTopicLesson(topicId)} />
               )}
 
               {/* ACTIVE STUDY SESSION CONTAINER */}
@@ -536,11 +484,12 @@ export default function App() {
           )}
         </div>
 
-        {/* Bottom Tab Bar Navigation */}
+        {/* ── Bottom Tab Bar ── */}
         {isOnboarded && tab !== "study_session" && (
           <div style={{
             background: C.surf, borderTop: `1.5px solid ${C.border}`,
-            display: "flex", padding: "8px 0 20px", flexShrink: 0, zIndex: 10
+            display: "flex", padding: `8px 0 calc(12px + env(safe-area-inset-bottom, 0px))`,
+            flexShrink: 0, zIndex: 20, position: "sticky", bottom: 0
           }}>
             {[
               { id: "home", Icon: Home, label: "Home" },
@@ -552,22 +501,14 @@ export default function App() {
               const active = tab === it.id;
               return (
                 <button key={it.id} onClick={() => setTab(it.id)}
-                  style={{
-                    flex: 1, background: "none", border: "none", cursor: "pointer",
-                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 0
-                  }}>
+                  style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 0 }}>
                   <div style={{
-                    width: 36, height: 26, display: "flex", alignItems: "center",
-                    justifyContent: "center", borderRadius: 14,
-                    background: active ? `${C.accent}22` : "transparent",
-                    transition: "background 0.2s"
+                    width: 40, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: 14, background: active ? `${C.accent}22` : "transparent", transition: "background 0.2s"
                   }}>
                     <it.Icon size={18} color={active ? C.accent : C.dim} strokeWidth={active ? 2.5 : 1.8} />
                   </div>
-                  <span style={{
-                    fontSize: 9, fontWeight: active ? 700 : 500,
-                    color: active ? C.accent : C.dim, letterSpacing: "0.02em"
-                  }}>
+                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: active ? C.accent : C.dim, letterSpacing: "0.02em" }}>
                     {it.label}
                   </span>
                 </button>
@@ -575,24 +516,6 @@ export default function App() {
             })}
           </div>
         )}
-      </div>
-
-      {/* Side Legend Details */}
-      <div style={{
-        position: "fixed", right: 30, top: "50%", transform: "translateY(-50%)",
-        display: "flex", flexDirection: "column", gap: 16, color: C.dim, fontSize: 11, maxWidth: 140
-      }}>
-        {[
-          ["Explore Tab", "Modular syllabus tree of subjects, topics, and checklists."],
-          ["Inbox Tab", "Active SM-2 spaced repetition queue with memory ratings."],
-          ["Strategy Tab", "Pass probability adjustments and mistake analysis."],
-          ["Circulars Tab", "Live RBI regulatory updates mapped to study content."]
-        ].map(([t, d]) => (
-          <div key={t}>
-            <p style={{ color: "#3A5570", fontWeight: 700, marginBottom: 2 }}>{t}</p>
-            <p style={{ color: "#1B3454", fontSize: 10, lineHeight: 1.3 }}>{d}</p>
-          </div>
-        ))}
       </div>
     </div>
   );

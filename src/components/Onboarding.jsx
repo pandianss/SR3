@@ -171,7 +171,7 @@ export default function Onboarding({ onComplete }) {
             <div style={{ background: `${C.warn}12`, border: `1px solid ${C.warn}33`, borderRadius: 12, padding: 12, display: "flex", gap: 10 }}>
               <AlertTriangle size={18} color={C.warn} style={{ flexShrink: 0 }} />
               <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.4, margin: 0 }}>
-                A higher target increases your projected scores, but missing it frequently triggers burnout-warning sequences in the app.
+                Setting a higher daily target improves your projected scores, but be realistic — consistency matters more than ambition.
               </p>
             </div>
           </div>

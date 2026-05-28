@@ -7,3 +7,14 @@ export const C = {
 };
 
 export const font = "'DM Sans', system-ui, sans-serif";
+
+// Shared subject-to-color mapping — use this instead of duplicating in components.
+const SUBJECT_COLORS = {
+  ABM: C.teal,
+  BFM: C.blue,
+  ABFM: C.warn,
+  BRBL: C.purple,
+};
+export function getSubColor(sub) {
+  return SUBJECT_COLORS[sub] || C.accent;
+}

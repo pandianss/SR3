@@ -66,6 +66,10 @@ export default function NumericalCalculator({ onClose }) {
     if (val >= 0) {
       setDisplay(String(parseFloat(Math.sqrt(val).toFixed(6))));
       setClearOnNext(true);
+    } else {
+      // Negative square root is undefined in real numbers — surface the error.
+      setDisplay("Error");
+      setClearOnNext(true);
     }
   };
 
@@ -150,9 +154,11 @@ export default function NumericalCalculator({ onClose }) {
           </button>
         ))}
 
-        {[["7", "8", "9", "×"], ["4", "5", "6", "-"], ["1", "2", "3", "+"]].map((row, rIdx) => (
+        {[["7", "8", "9", "×"], ["4", "5", "6", "-"], ["1", "2", "3", "+"]].map((row, rIdx) =>
           row.map(btn => (
-            <button key={btn} onClick={() => isNaN(btn) ? handleOp(btn) : handleDigit(btn)}
+            <button key={`${rIdx}-${btn}`}
+              // Operators: non-numeric and not the decimal point.
+              onClick={() => (!isNaN(btn) || btn === ".") ? handleDigit(btn) : handleOp(btn)}
               style={{
                 background: isNaN(btn) ? C.card : C.surf,
                 border: `1px solid ${C.border}`,
@@ -162,7 +168,7 @@ export default function NumericalCalculator({ onClose }) {
               {btn}
             </button>
           ))
-        ))}
+        )}
 
         {/* Last Row */}
         <button onClick={() => handleDigit("0")}

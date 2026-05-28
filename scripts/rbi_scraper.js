@@ -63,7 +63,7 @@ async function scrapeRBIPage() {
     });
 
     console.log(`[Scraper] Successfully extracted ${updates.length} raw notification nodes.`);
-    return updates.slice(0, 5); // Process top 5 updates for validation/demonstration
+    return updates.slice(0, 20); // Process top 20 updates per run
   } catch (error) {
     console.error("[Scraper] Failed to fetch or parse RBI HTML DOM:", error.message);
     return [];
@@ -150,10 +150,10 @@ async function runPipeline() {
     }
   }
 
-  // Save to temporary JSON file
-  const outputPath = path.resolve("./src/data/newIngestedCirculars.json");
+  // Save to the JSON file that Circulars.jsx imports at build time.
+  const outputPath = path.resolve("./src/data/ingestedCirculars.json");
   fs.writeFileSync(outputPath, JSON.stringify(processedDatabase, null, 2), "utf8");
-  console.log(`[Database] Ingestion complete. Output sync file created at: ${outputPath}`);
+  console.log(`[Database] Ingestion complete. ${processedDatabase.length} circulars written to: ${outputPath}`);
   console.log("=================================================");
 }
 
