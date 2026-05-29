@@ -1,6 +1,6 @@
-// RBI Notifications Scraper & Ingestion Script
+// RBI Notifications RSS Scraper & Ingestion Script
 // Node.js only — run via: node scripts/rbi_scraper.js
-// Utilizes Axios for requests, Cheerio for DOM parsing, and Gemini API for LLM classification.
+// Utilizes Axios for requests, Cheerio for XML parsing, and Gemini API for LLM classification.
 
 import axios from "axios";
 import * as cheerio from "cheerio";
@@ -9,9 +9,9 @@ import path from "path";
 
 // Load environment API key — never hard-code credentials here.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const RBI_NOTIFICATIONS_URL = "https://rbi.org.in/Scripts/Notifications.aspx";
+const RBI_RSS_URL = "https://www.rbi.org.in/notifications_rss.xml";
 
-// Mapped topics for quick pattern matching
+// Mapped topics for quick pattern matching if Gemini is not active
 const TOPIC_KEYWORD_MAP = [
   { keyword: "basel", topicId: "T-BFM-B1", subjectId: "BFM" },
   { keyword: "capital adequacy", topicId: "T-BFM-B1", subjectId: "BFM" },
@@ -31,49 +31,65 @@ const TOPIC_KEYWORD_MAP = [
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 async function scrapeRBIPage() {
-  console.log(`[Scraper] Fetching RBI Notifications Page: ${RBI_NOTIFICATIONS_URL}`);
+  console.log(`[Scraper] Fetching RBI Notifications RSS Feed: ${RBI_RSS_URL}`);
   try {
-    const response = await axios.get(RBI_NOTIFICATIONS_URL, {
+    const response = await axios.get(RBI_RSS_URL, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
 
-    const $ = cheerio.load(response.data);
+    const $ = cheerio.load(response.data, { xmlMode: true });
     const updates = [];
 
-    // Select notification row containers
-    $("table.tablebg tr, table.table-responsive tr").each((index, element) => {
-      if (index === 0) return; // skip header
-
-      const dateText = $(element).find("td.griddate, td:nth-child(1)").text().trim();
-      const titleLink = $(element).find("a[href*='Notification']");
-      const titleText = titleLink.text().trim();
-      const url = titleLink.attr("href");
+    $("item").each((index, element) => {
+      const titleText = $(element).find("title").text().trim();
+      // In RSS 2.0, <link> may not expose text() reliably in xmlMode; fall back to html() or atom:link href
+      const url = ($(element).find("link").text().trim()
+        || $(element).find("link").html()?.trim()
+        || $(element).find("link").attr("href")
+        || "");
+      const pubDate = $(element).find("pubDate").text().trim();
+      const desc = $(element).find("description").text().trim();
 
       if (titleText && url) {
-        const absoluteUrl = url.startsWith("http") ? url : `https://rbi.org.in/Scripts/${url}`;
+        // Parse date to readable format (e.g. "25 May 2026")
+        let formattedDate = pubDate;
+        try {
+          const d = new Date(pubDate);
+          if (!isNaN(d.getTime())) {
+            formattedDate = d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+          }
+        } catch (e) {}
+
+        // Extract ID
+        let notificationId = `RBI-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+        const descMatch = desc.match(/RBI\/\d{4}-\d{2}\/\d+/i) || desc.match(/RBI\/[A-Z0-9\/-]+/i);
+        if (descMatch) {
+          notificationId = descMatch[0];
+        } else {
+          const titleMatch = titleText.match(/RBI\/\d{4}-\d{2}\/\d+/i) || titleText.match(/RBI\/[A-Z0-9\/-]+/i);
+          if (titleMatch) {
+            notificationId = titleMatch[0];
+          }
+        }
+
         updates.push({
-          date: dateText,
+          date: formattedDate,
           title: titleText,
-          url: absoluteUrl,
-          id: parseNotificationId(titleText)
+          url,
+          id: notificationId,
+          descriptionRaw: desc
         });
       }
     });
 
     console.log(`[Scraper] Successfully extracted ${updates.length} raw notification nodes.`);
-    return updates.slice(0, 20); // Process top 20 updates per run
+    return updates;
   } catch (error) {
-    console.error("[Scraper] Failed to fetch or parse RBI HTML DOM:", error.message);
+    console.error("[Scraper] Failed to fetch or parse RBI RSS feed:", error.message);
     return [];
   }
-}
-
-// Extract standard RBI notification identifier, e.g. "RBI/2025-26/12"
-function parseNotificationId(text) {
-  const match = text.match(/RBI\/\d{4}-\d{2}\/\d+/i);
-  return match ? match[0] : `RBI-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 }
 
 async function classifyWithGemini(notification, apiKey) {
@@ -113,14 +129,13 @@ async function classifyWithGemini(notification, apiKey) {
   Do not include markdown tags. Return raw JSON.`;
 
   try {
-    // API key transmitted via header — never appended to the URL.
     const res = await axios.post(
       GEMINI_ENDPOINT,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: "application/json" }
       },
-      { headers: { "x-goog-api-key": apiKey } }
+      { headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey } }
     );
 
     const jsonText = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -139,7 +154,23 @@ async function classifyWithGemini(notification, apiKey) {
 
 async function runPipeline() {
   console.log("=== Launching RBI Circular Ingestion Pipeline ===");
-  const rawNotifications = await scrapeRBIPage();
+  const allNotifications = await scrapeRBIPage();
+  const MAX_PER_RUN = parseInt(process.env.RBI_MAX_ITEMS || "20", 10);
+
+  // Read existing IDs to skip already-ingested circulars
+  const outputPath = path.resolve("./src/data/ingestedCirculars.json");
+  let existingIds = new Set();
+  try {
+    const existing = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+    existingIds = new Set(existing.map(c => c.id));
+  } catch (_) {}
+
+  // Only process new items, capped after deduplication
+  const rawNotifications = allNotifications
+    .filter(n => !existingIds.has(n.id))
+    .slice(0, MAX_PER_RUN);
+
+  console.log(`[Pipeline] ${rawNotifications.length} new notifications to process (${allNotifications.length - rawNotifications.length} skipped as already ingested).`);
   const processedDatabase = [];
 
   for (const notification of rawNotifications) {
@@ -150,15 +181,20 @@ async function runPipeline() {
     }
   }
 
-  // Save to the JSON file that Circulars.jsx imports at build time.
-  const outputPath = path.resolve("./src/data/ingestedCirculars.json");
-  fs.writeFileSync(outputPath, JSON.stringify(processedDatabase, null, 2), "utf8");
+  // Save to the JSON file
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, JSON.stringify(processedDatabase, null, 2) + "\n", "utf8");
   console.log(`[Database] Ingestion complete. ${processedDatabase.length} circulars written to: ${outputPath}`);
   console.log("=================================================");
 }
 
-// Run the script if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run the script if executed directly (supporting cross-platform path comparisons)
+const isDirectRun = process.argv[1] && (
+  import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/')) ||
+  process.argv[1].replace(/\\/g, '/').endsWith('scripts/rbi_scraper.js')
+);
+
+if (isDirectRun) {
   runPipeline();
 }
 

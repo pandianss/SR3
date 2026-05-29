@@ -294,9 +294,28 @@ export default function App() {
                     </p>
                   </div>
 
+                  {/* Subject Picker */}
+                  <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Study Subject
+                  </p>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10, flexShrink: 0, marginBottom: 16 }}>
+                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => (
+                      <button key={s.id} onClick={() => setActiveSubject(s.id)}
+                        style={{
+                          background: activeSubject === s.id ? s.color : C.card,
+                          border: `1.5px solid ${activeSubject === s.id ? s.color : C.border}`,
+                          borderRadius: 8, padding: "6px 14px",
+                          color: activeSubject === s.id ? "#000" : C.muted,
+                          fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0
+                        }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Study Modes Panel */}
                   <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-                    Select Adaptive Study Session
+                    Select Study Mode
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
                     {[
@@ -326,11 +345,8 @@ export default function App() {
                               <div style={{ marginTop: 4 }}>
                                 <button onClick={(e) => {
                                   e.stopPropagation();
-                                  const list = MICRO_LESSONS.filter(l =>
-                                    l.subjectId === "BFM" || l.subjectId === "ABM" ||
-                                    (userProfile?.elective && l.subjectId === userProfile.elective)
-                                  );
-                                  handleStartStudySession(list, m.id);
+                                  const list = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
+                                  handleStartStudySession(list.length > 0 ? list : MICRO_LESSONS, m.id);
                                 }}
                                   style={{ background: m.color, border: "none", borderRadius: 6, color: "#000", fontSize: 10, fontWeight: 700, padding: "3px 8px", cursor: "pointer" }}>
                                   Start →
