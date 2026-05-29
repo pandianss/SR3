@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
-import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats } from "./utils/spacedRepetition";
+import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
@@ -49,6 +49,10 @@ export default function App() {
   const [expandedModule, setExpandedModule] = useState("BFM-B");
   const [selectedFormulaTab, setSelectedFormulaTab] = useState("All");
 
+  // Checkpoint for mid-session resume
+  const [checkpoint, setCheckpoint] = useState(null);
+  const [resumeIndex, setResumeIndex] = useState(0);
+
   // Seed mock spaced repetition queue on launch
   useEffect(() => {
     seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
@@ -58,6 +62,9 @@ export default function App() {
       const profile = localStorage.getItem("caiib_user_profile");
       if (profile) setUserProfile(JSON.parse(profile));
     }
+    // Restore any saved checkpoint
+    const saved = loadSessionCheckpoint();
+    if (saved) setCheckpoint(saved);
   }, []);
 
   const handleOnboardingComplete = (profile) => {
@@ -68,10 +75,12 @@ export default function App() {
     setTab("home");
   };
 
-  const handleStartStudySession = (queue, mode = "low") => {
+  const handleStartStudySession = (queue, mode = "low", startIndex = 0) => {
     setSessionQueue(queue);
     setEnergyMode(mode);
     setTab("study_session");
+    saveSessionCheckpoint({ subjectId: activeSubject, energyMode: mode, queueIds: queue.map(l => l.id), currentIndex: startIndex });
+    setCheckpoint(null); // consumed
   };
 
   const handleLaunchTopicLesson = (topicId) => {
@@ -293,6 +302,45 @@ export default function App() {
                       🎯 Target Elective: {userProfile?.elective ? ELECTIVES.find(e => e.id === userProfile.elective)?.name : "Risk Management"}
                     </p>
                   </div>
+
+                  {/* Resume Banner — shown when a mid-session checkpoint exists */}
+                  {checkpoint && (
+                    <div style={{
+                      background: `${C.teal}12`, border: `1.5px solid ${C.teal}44`,
+                      borderRadius: 14, padding: "12px 14px", marginBottom: 16,
+                      display: "flex", alignItems: "center", gap: 12
+                    }}>
+                      <BookMarked size={18} color={C.teal} style={{ flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ color: C.teal, fontSize: 11, fontWeight: 700, margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Session saved</p>
+                        <p style={{ color: C.text, fontSize: 12, margin: 0 }}>
+                          {checkpoint.subjectId} · Card {checkpoint.currentIndex + 1} of {checkpoint.queueIds.length}
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => {
+                          const allItems = [...MICRO_LESSONS, ...FORMULAS];
+                          const queue = checkpoint.queueIds.map(id => allItems.find(l => l.id === id)).filter(Boolean);
+                          if (queue.length) {
+                            setActiveSubject(checkpoint.subjectId);
+                            setEnergyMode(checkpoint.energyMode);
+                            setSessionQueue(queue);
+                            setTab("study_session");
+                            // Pass startIndex via StudyPanel initialIndex prop
+                            setResumeIndex(checkpoint.currentIndex);
+                            clearSessionCheckpoint();
+                            setCheckpoint(null);
+                          }
+                        }} style={{ background: C.teal, border: "none", borderRadius: 8, padding: "6px 12px", color: "#000", fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                          Resume →
+                        </button>
+                        <button onClick={() => { clearSessionCheckpoint(); setCheckpoint(null); }}
+                          style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.muted, fontSize: 11, cursor: "pointer" }}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Subject Picker */}
                   <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
@@ -558,7 +606,9 @@ export default function App() {
               {/* ACTIVE STUDY SESSION CONTAINER */}
               {tab === "study_session" && (
                 <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab}
-                  onSessionComplete={() => setTab("session_complete")} />
+                  initialIndex={resumeIndex}
+                  onCardAdvance={(idx) => saveSessionCheckpoint({ subjectId: activeSubject, energyMode, queueIds: sessionQueue.map(l => l.id), currentIndex: idx })}
+                  onSessionComplete={() => { clearSessionCheckpoint(); setCheckpoint(null); setResumeIndex(0); setTab("session_complete"); }} />
               )}
             </>
           )}

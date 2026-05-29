@@ -6,8 +6,8 @@ import NumericalCalculator from "./NumericalCalculator";
 import { Clock, Calculator, Edit3, CheckCircle, AlertTriangle, Zap, Volume2, Sparkles, BookOpen } from "lucide-react";
 import { C } from "../theme";
 
-export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode, setTab }) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdvance, energyMode, setTab, initialIndex = 0 }) {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [currentSubStep, setCurrentSubStep] = useState(0); // 0: Concept, 1: Pillars, 2: Scenario, 3: Quiz, 4: Rating
   const [pickedOpt, setPickedOpt] = useState(null);
 
@@ -26,6 +26,9 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode
   const [aiExplanation, setAiExplanation] = useState("");
   const [loadingExplanation, setLoadingExplanation] = useState(false);
   const [showExplainModal, setShowExplainModal] = useState(false);
+
+  // Sync to initialIndex when it changes (resume from checkpoint)
+  useEffect(() => { setCurrentIndex(initialIndex); }, [initialIndex]);
 
   const item = sessionQueue[currentIndex];
 
@@ -161,7 +164,9 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode
 
     // Proceed to next card in session
     if (currentIndex < sessionQueue.length - 1) {
-      setCurrentIndex(currentIndex + 1);
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      onCardAdvance?.(nextIndex);
     } else {
       onSessionComplete();
     }

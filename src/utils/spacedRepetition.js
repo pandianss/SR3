@@ -176,6 +176,30 @@ export function getMemoryStrengthStats(allLessonsCount = 0, allFormulasCount = 0
   };
 }
 
+// ─── Session Checkpoint ──────────────────────────────────────────────────────
+// Saves mid-session position so the user can resume after navigating away.
+
+const CHECKPOINT_KEY = "caiib_session_checkpoint";
+
+export function saveSessionCheckpoint({ subjectId, energyMode, queueIds, currentIndex }) {
+  try {
+    localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ subjectId, energyMode, queueIds, currentIndex, savedAt: Date.now() }));
+  } catch (e) {}
+}
+
+export function loadSessionCheckpoint() {
+  try {
+    const raw = localStorage.getItem(CHECKPOINT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function clearSessionCheckpoint() {
+  localStorage.removeItem(CHECKPOINT_KEY);
+}
+
 // Seed the database with some historical card states for demonstration,
 // so that the Revision Inbox doesn't start completely blank and shows due items.
 export function seedMockSpacedRepetitionData(allLessons = [], allFormulas = []) {
