@@ -4,7 +4,8 @@ import {
   BarChart2, FlaskConical, Play, AlertTriangle,
   RotateCcw, Target, Battery, ChevronRight, Star,
   BookMarked, Shield, FileText, RefreshCw, WifiOff,
-  Settings, X, KeyRound, CheckCircle2, ServerCrash
+  Settings, X, KeyRound, CheckCircle2, ServerCrash,
+  LogOut, User
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
@@ -12,15 +13,26 @@ import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats,
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
+import { subscribeToAuthState, signOutUser, isConfigured } from "./utils/firebase";
+import { syncRead, syncWrite } from "./utils/syncStore";
 
 // Component imports
 import Onboarding from "./components/Onboarding";
+import AuthScreen from "./components/AuthScreen";
 import StudyPanel from "./components/StudyPanel";
 import RevisionInbox from "./components/RevisionInbox";
 import PassOptimizer from "./components/PassOptimizer";
 import Circulars from "./components/Circulars";
 
 export default function App() {
+  // ── Auth state ──────────────────────────────────────────────────────────────
+  // null = not yet resolved, false = signed out, object = Firebase user
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [skippedAuth, setSkippedAuth] = useState(
+    () => localStorage.getItem("caiib_skip_auth") === "true"
+  );
+
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [tab, setTab] = useState("home");
@@ -53,18 +65,36 @@ export default function App() {
   const [checkpoint, setCheckpoint] = useState(null);
   const [resumeIndex, setResumeIndex] = useState(0);
 
-  // Seed mock spaced repetition queue on launch
+  // ── Bootstrap: auth listener + cloud sync ──────────────────────────────────
   useEffect(() => {
     seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
-    const onboarded = localStorage.getItem("caiib_onboarded") === "true";
-    if (onboarded) {
-      setIsOnboarded(true);
-      const profile = localStorage.getItem("caiib_user_profile");
-      if (profile) setUserProfile(JSON.parse(profile));
-    }
-    // Restore any saved checkpoint
-    const saved = loadSessionCheckpoint();
-    if (saved) setCheckpoint(saved);
+
+    const unsub = subscribeToAuthState(async (user) => {
+      setFirebaseUser(user);
+      setAuthResolved(true);
+
+      const uid = user?.uid ?? null;
+
+      // Load profile — prefer Firestore, fall back to localStorage
+      const profile = await syncRead(uid, "profile", "caiib_user_profile");
+      if (profile) {
+        setUserProfile(profile);
+        setIsOnboarded(true);
+      } else {
+        const onboarded = localStorage.getItem("caiib_onboarded") === "true";
+        if (onboarded) {
+          setIsOnboarded(true);
+          const local = localStorage.getItem("caiib_user_profile");
+          if (local) setUserProfile(JSON.parse(local));
+        }
+      }
+
+      // Restore checkpoint
+      const saved = loadSessionCheckpoint();
+      if (saved) setCheckpoint(saved);
+    });
+
+    return unsub;
   }, []);
 
   const handleOnboardingComplete = (profile) => {
@@ -72,6 +102,8 @@ export default function App() {
     setIsOnboarded(true);
     const profileToMode = { commute: "low", night: "focus", morning: "rapid" };
     setEnergyMode(profileToMode[profile.energyProfile] || "low");
+    // Persist profile locally + to Firestore
+    syncWrite(firebaseUser?.uid ?? null, "profile", "caiib_user_profile", profile);
     setTab("home");
   };
 
@@ -134,6 +166,27 @@ export default function App() {
     : userProfile?.role === "branch" ? "Branch Manager"
     : "Banker";
 
+  // ── Auth gate ───────────────────────────────────────────────────────────────
+  // Show loading spinner until Firebase resolves auth state
+  if (!authResolved) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%", width: 32, height: 32, animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // Show auth screen if Firebase is configured and user is not signed in and hasn't skipped
+  if (isConfigured && !firebaseUser && !skippedAuth) {
+    return (
+      <AuthScreen onSkip={() => {
+        localStorage.setItem("caiib_skip_auth", "true");
+        setSkippedAuth(true);
+      }} />
+    );
+  }
+
   return (
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center" }}>
       <style>{`
@@ -195,6 +248,33 @@ export default function App() {
                   <X size={20} />
                 </button>
               </div>
+
+              {/* Account info */}
+              {firebaseUser ? (
+                <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
+                  {firebaseUser.photoURL
+                    ? <img src={firebaseUser.photoURL} alt="avatar" style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0 }} />
+                    : <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${C.accent}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><User size={18} color={C.accent} /></div>
+                  }
+                  <div style={{ flex: 1, overflow: "hidden" }}>
+                    <p style={{ color: C.text, fontWeight: 600, fontSize: 13, margin: 0, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{firebaseUser.displayName || "Signed in"}</p>
+                    <p style={{ color: C.muted, fontSize: 11, margin: 0, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{firebaseUser.email}</p>
+                  </div>
+                  <button onClick={() => { signOutUser(); setFirebaseUser(null); setSkippedAuth(false); localStorage.removeItem("caiib_skip_auth"); }}
+                    style={{ background: `${C.err}18`, border: `1px solid ${C.err}44`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: C.err, fontSize: 11, fontWeight: 600 }}>
+                    <LogOut size={13} /> Sign out
+                  </button>
+                </div>
+              ) : (
+                <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                  <User size={16} color={C.dim} />
+                  <span style={{ color: C.muted, fontSize: 12, flex: 1 }}>Offline mode — progress stored locally only</span>
+                  <button onClick={() => { setSkippedAuth(false); localStorage.removeItem("caiib_skip_auth"); setShowSettings(false); }}
+                    style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700 }}>
+                    Sign in
+                  </button>
+                </div>
+              )}
 
               {/* AI Features — server-managed key status */}
               <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>

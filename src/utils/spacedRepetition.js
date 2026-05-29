@@ -1,5 +1,8 @@
 // Spaced Repetition Engine using SuperMemo SM-2 Algorithm
 // For tracking memory decay and scheduling revision cards.
+// Reads/writes via syncStore so data mirrors to Firestore when signed in.
+
+import { localRead, localWrite, syncWrite } from "./syncStore";
 
 const STORAGE_KEY = "caiib_spaced_rep_v1";
 
@@ -26,21 +29,13 @@ const RATING_MAP = {
 };
 
 export function getAllCardStates() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (e) {
-    console.error("Failed to read spaced rep states:", e);
-    return {};
-  }
+  return localRead(STORAGE_KEY) ?? {};
 }
 
-export function saveAllCardStates(states) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(states));
-  } catch (e) {
-    console.error("Failed to save spaced rep states:", e);
-  }
+// uid is optional — pass it to mirror writes to Firestore
+export function saveAllCardStates(states, uid = null) {
+  localWrite(STORAGE_KEY, states);
+  if (uid) syncWrite(uid, "cardStates", STORAGE_KEY, states);
 }
 
 export function getCardState(cardId) {
@@ -181,23 +176,19 @@ export function getMemoryStrengthStats(allLessonsCount = 0, allFormulasCount = 0
 
 const CHECKPOINT_KEY = "caiib_session_checkpoint";
 
-export function saveSessionCheckpoint({ subjectId, energyMode, queueIds, currentIndex }) {
-  try {
-    localStorage.setItem(CHECKPOINT_KEY, JSON.stringify({ subjectId, energyMode, queueIds, currentIndex, savedAt: Date.now() }));
-  } catch (e) {}
+export function saveSessionCheckpoint({ subjectId, energyMode, queueIds, currentIndex }, uid = null) {
+  const data = { subjectId, energyMode, queueIds, currentIndex, savedAt: Date.now() };
+  localWrite(CHECKPOINT_KEY, data);
+  if (uid) syncWrite(uid, "checkpoint", CHECKPOINT_KEY, data);
 }
 
 export function loadSessionCheckpoint() {
-  try {
-    const raw = localStorage.getItem(CHECKPOINT_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
-    return null;
-  }
+  return localRead(CHECKPOINT_KEY);
 }
 
-export function clearSessionCheckpoint() {
+export function clearSessionCheckpoint(uid = null) {
   localStorage.removeItem(CHECKPOINT_KEY);
+  if (uid) syncWrite(uid, "checkpoint", CHECKPOINT_KEY, null);
 }
 
 // Seed the database with some historical card states for demonstration,
