@@ -3,7 +3,7 @@ import { calculatePassProbability, analyzeMistakePatterns, generateStudySchedule
 import { TrendingUp, AlertTriangle, Lightbulb, Play, Settings } from "lucide-react";
 import { C, getSubColor } from "../theme";
 
-export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective, apiKey }) {
+export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective }) {
   const [studyAdjust, setStudyAdjust] = useState(0);
   const [data, setData] = useState({
     probability: 50,
@@ -37,7 +37,7 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
     advisoryTimerRef.current = setTimeout(async () => {
       setLoadingAdvisory(true);
       try {
-        const text = await generateStudySchedule(scores, activeElective, apiKey);
+        const text = await generateStudySchedule(scores, activeElective);
         setAiAdvisory(text);
       } catch (e) {
         setAiAdvisory("Failed to generate strategic advisory. Review projections manually.");
@@ -48,7 +48,7 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
     return () => {
       if (advisoryTimerRef.current) clearTimeout(advisoryTimerRef.current);
     };
-  }, [data.projectedScores, activeElective, apiKey]);
+  }, [data.projectedScores, activeElective]);
 
   const r = 58, circ = 2 * Math.PI * r;
   const offset = circ * (1 - data.probability / 100);

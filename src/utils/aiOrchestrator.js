@@ -1,55 +1,41 @@
 // AI Orchestrator & Client-Side Intelligence Simulator
 // Implements procedural math generators, mistake trackers, and pass probability calculators.
+// Gemini calls are now proxied through the secure backend — no API key ever reaches the browser.
 
 import { SUBJECTS, FORMULAS } from "../data/contentGraph";
 import { getAllCardStates } from "./spacedRepetition";
 
-const GEMINI_ENDPOINT =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
-
-// Centralized Gemini POST — key sent via request header, never embedded in the URL.
-async function geminiPost(apiKey, body) {
-  const res = await fetch(GEMINI_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
-  return res.json();
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
 // 1. Procedural Numerical Problem Generator
-// Randomizes values for core CAIIB formulas and generates custom step-by-step solutions and quizzes.
+// Randomises values for core CAIIB formulas and generates step-by-step drills.
+// ─────────────────────────────────────────────────────────────────────────────
 export function generateProceduralNumerical(topicId) {
   const seed = Math.random();
 
   if (topicId === "T-BFM-B1") {
     // Basel III Capital Adequacy
-    const rwa = Math.floor(seed * 6 + 2) * 500; // ₹1,000 Cr to ₹4,000 Cr
-    const cet1Pct = parseFloat((seed * 0.03 + 0.045).toFixed(3)); // 4.5% to 7.5%
-    const addT1Pct = parseFloat((seed * 0.015 + 0.01).toFixed(3)); // 1.0% to 2.5%
-    const t2Pct = parseFloat((seed * 0.02 + 0.01).toFixed(3)); // 1.0% to 3.0%
+    const rwa        = Math.floor(seed * 6 + 2) * 500;
+    const cet1Pct    = parseFloat((seed * 0.03 + 0.045).toFixed(3));
+    const addT1Pct   = parseFloat((seed * 0.015 + 0.01).toFixed(3));
+    const t2Pct      = parseFloat((seed * 0.02 + 0.01).toFixed(3));
 
-    const cet1 = Math.round(rwa * cet1Pct);
-    const addT1 = Math.round(rwa * addT1Pct);
-    const t1 = cet1 + addT1;
-    const t2 = Math.round(rwa * t2Pct);
-    const totalCap = t1 + t2;
+    const cet1       = Math.round(rwa * cet1Pct);
+    const addT1      = Math.round(rwa * addT1Pct);
+    const t1         = cet1 + addT1;
+    const t2         = Math.round(rwa * t2Pct);
+    const totalCap   = t1 + t2;
 
-    const cet1Ratio = parseFloat(((cet1 / rwa) * 100).toFixed(2));
-    const t1Ratio = parseFloat(((t1 / rwa) * 100).toFixed(2));
-    const crar = parseFloat(((totalCap / rwa) * 100).toFixed(2));
+    const cet1Ratio  = parseFloat(((cet1 / rwa) * 100).toFixed(2));
+    const t1Ratio    = parseFloat(((t1   / rwa) * 100).toFixed(2));
+    const crar       = parseFloat(((totalCap / rwa) * 100).toFixed(2));
 
-    // RBI Limits: CET1 >= 5.5%, Tier I >= 7.0%, Total CRAR >= 9.0%
-    const cet1Ok = cet1Ratio >= 5.5;
-    const t1Ok = t1Ratio >= 7.0;
-    const crarOk = crar >= 9.0;
+    const cet1Ok     = cet1Ratio >= 5.5;
+    const t1Ok       = t1Ratio   >= 7.0;
+    const crarOk     = crar      >= 9.0;
     const isCompliant = cet1Ok && t1Ok && crarOk;
 
-    const questionVal = Math.random() > 0.5 ? "Total CRAR" : "Tier I Ratio";
-    const answerVal = questionVal === "Total CRAR" ? crar : t1Ratio;
-
-    // Create options with random shifts
+    const questionVal  = Math.random() > 0.5 ? "Total CRAR" : "Tier I Ratio";
+    const answerVal    = questionVal === "Total CRAR" ? crar : t1Ratio;
     const correctValStr = `${answerVal}%`;
     const opts = [
       correctValStr,
@@ -81,12 +67,10 @@ export function generateProceduralNumerical(topicId) {
 
   if (topicId === "T-ABM-C1") {
     // Working Capital: Tandon MPBF Method II
-    const ca = Math.floor(seed * 6 + 4) * 100; // 400 to 900 Lakhs
-    const clExlBank = Math.floor(seed * 3 + 1.5) * 100; // 150 to 450 Lakhs
-
-    const margin = Math.round(ca * 0.25);
-    const mpbf = Math.round((ca * 0.75) - clExlBank);
-    const nwc = Math.round(ca - clExlBank - Math.max(0, mpbf));
+    const ca       = Math.floor(seed * 6 + 4) * 100;
+    const clExlBank = Math.floor(seed * 3 + 1.5) * 100;
+    const margin   = Math.round(ca * 0.25);
+    const mpbf     = Math.round((ca * 0.75) - clExlBank);
 
     const opts = [
       `₹${mpbf} Lakhs`,
@@ -106,25 +90,24 @@ export function generateProceduralNumerical(topicId) {
         `MPBF = (0.75 × ${ca}) − ${clExlBank} = ${ca * 0.75} − ${clExlBank} = ₹${mpbf} Lakhs`
       ],
       verdict: mpbf > 0
-        ? `✅ Maximum Bank Finance allowed under Method II is ₹${mpbf} Lakhs. Borrower must bring in ₹${margin} Lakhs as margin (Net Working Capital).`
+        ? `✅ Maximum Bank Finance allowed under Method II is ₹${mpbf} Lakhs. Borrower must bring ₹${margin} Lakhs as margin.`
         : `❌ Negative Assessment (Borrower's current liabilities exceed available margin limits under Method II rules).`,
       quiz: {
         question: `Calculate the Maximum Permissible Bank Finance (MPBF) for this borrower using Tandon Committee Method II:`,
         opts,
         correct: correctIdx,
-        why: `Under Method II, Margin required from long-term funds is 25% of Current Assets. Hence, MPBF = (0.75 * CA) - CL. Resolves to: ₹${mpbf} Lakhs.`
+        why: `Under Method II, margin required from long-term funds is 25% of Current Assets. Hence, MPBF = (0.75 * CA) - CL. Resolves to: ₹${mpbf} Lakhs.`
       }
     };
   }
 
   if (topicId === "T-ABFM-B1") {
     // CAPM Cost of Equity
-    const rf = parseFloat((seed * 3 + 5.5).toFixed(1)); // 5.5% to 8.5%
-    const rm = parseFloat((seed * 4 + 11.5).toFixed(1)); // 11.5% to 15.5%
-    const beta = parseFloat((seed * 0.6 + 0.8).toFixed(2)); // 0.80 to 1.40
-
+    const rf      = parseFloat((seed * 3 + 5.5).toFixed(1));
+    const rm      = parseFloat((seed * 4 + 11.5).toFixed(1));
+    const beta    = parseFloat((seed * 0.6 + 0.8).toFixed(2));
     const premium = parseFloat((rm - rf).toFixed(2));
-    const ke = parseFloat((rf + beta * premium).toFixed(2));
+    const ke      = parseFloat((rf + beta * premium).toFixed(2));
 
     const opts = [
       `${ke}%`,
@@ -142,7 +125,7 @@ export function generateProceduralNumerical(topicId) {
         `Equity Risk Premium = β × (Rm − Rf) = ${beta} × ${premium}% = ${(beta * premium).toFixed(2)}%`,
         `Cost of Equity (Ke) = Rf + Equity Risk Premium = ${rf}% + ${(beta * premium).toFixed(2)}% = ${ke}%`
       ],
-      verdict: `✅ Hurdle rate Ke is established at ${ke}%. Future project cash flows should be discounted at this discount rate.`,
+      verdict: `✅ Hurdle rate Ke established at ${ke}%. Discount all future project cash flows at this rate.`,
       quiz: {
         question: `Calculate the cost of equity (Ke) using the Capital Asset Pricing Model (CAPM) for this project:`,
         opts,
@@ -152,37 +135,31 @@ export function generateProceduralNumerical(topicId) {
     };
   }
 
-  // Default fallback if topic doesn't support math
-  return null;
+  return null; // topic doesn't support a procedural drill
 }
 
-// 2. Mistake Pattern & Weakness Analyzer
-// Parses card history to extract specific conceptual errors.
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. Mistake Pattern & Weakness Analyser
+// Parses card history to surface specific conceptual errors.
+// ─────────────────────────────────────────────────────────────────────────────
 export function analyzeMistakePatterns() {
-  const states = getAllCardStates();
+  const states     = getAllCardStates();
   const weaknesses = [];
 
-  // Compile items with low scores or high failure counts
   Object.entries(states).forEach(([cardId, state]) => {
     const failures = state.history.filter(h => h.rating <= 2).length;
 
     if (failures >= 2 || (state.repetitions === 0 && state.lastReviewed !== null)) {
-      // Find mapped formula or details
       const formula = FORMULAS.find(f => f.id === cardId);
       if (formula) {
         weaknesses.push({
-          id: cardId,
-          type: "Formula",
-          name: formula.name,
-          subject: formula.sub,
+          id: cardId, type: "Formula", name: formula.name, subject: formula.sub,
           failureCount: failures || 1,
           recommendation: `Revise formula details: ${formula.f}. Do 2 numerical practice drills.`
         });
       } else {
-        // Assume it's a micro-lesson (prefixed with L-)
         weaknesses.push({
-          id: cardId,
-          type: "Concept",
+          id: cardId, type: "Concept",
           name: cardId.replace("L-", "") + " Concept Review",
           subject: cardId.includes("BFM") ? "BFM" : cardId.includes("ABM") ? "ABM" : "CAIIB",
           failureCount: failures || 1,
@@ -192,59 +169,41 @@ export function analyzeMistakePatterns() {
     }
   });
 
-  // If no organic weaknesses yet, seed some useful default suggestions
   if (weaknesses.length === 0) {
     weaknesses.push({
-      id: "seed-w1",
-      type: "Topic Risk",
-      name: "Bond Yield & Duration Calculations",
-      subject: "BFM",
-      failureCount: 2,
+      id: "seed-w1", type: "Topic Risk",
+      name: "Bond Yield & Duration Calculations", subject: "BFM", failureCount: 2,
       recommendation: "Highly weighted numerical domain. Review Macaulay vs Modified Duration relation."
     });
     weaknesses.push({
-      id: "seed-w2",
-      type: "Pillar Overlap",
-      name: "Basel Pillar 2 Risk Assets (ICAAP)",
-      subject: "BFM",
-      failureCount: 1,
+      id: "seed-w2", type: "Pillar Overlap",
+      name: "Basel Pillar 2 Risk Assets (ICAAP)", subject: "BFM", failureCount: 1,
       recommendation: "Focus on supervisory audit rules and RBI domestic systemic thresholds."
     });
   }
 
-  return weaknesses.slice(0, 3); // top 3 priorities
+  return weaknesses.slice(0, 3);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 // 3. Dynamic Pass Probability & Projection Engine
-// Combines syllabus coverage, card states, and target scores to compute exam pass probability.
+// ─────────────────────────────────────────────────────────────────────────────
 export function calculatePassProbability(userProfile, studyHoursAdjustment = 0) {
   const states = getAllCardStates();
 
-  // Base weights for subjects
-  const defaultBaseScores = {
-    ABM: 52,
-    BFM: 48,
-    ABFM: 45,
-    BRBL: 50,
-    Elective: 46
-  };
+  const defaultBaseScores = { ABM: 52, BFM: 48, ABFM: 45, BRBL: 50, Elective: 46 };
+  const electiveId        = userProfile?.elective || "Risk";
 
-  // Subject identifier for Elective
-  const electiveId = userProfile?.elective || "Risk";
-
-  // Calculate average mastery factor from reviews
   const subjectMasteries = { ABM: 0, BFM: 0, ABFM: 0, BRBL: 0, [electiveId]: 0 };
-  const subjectCounts = { ABM: 0, BFM: 0, ABFM: 0, BRBL: 0, [electiveId]: 0 };
+  const subjectCounts    = { ABM: 0, BFM: 0, ABFM: 0, BRBL: 0, [electiveId]: 0 };
 
   Object.entries(states).forEach(([cardId, state]) => {
-    // Determine subject
     let sub = "ABM";
-    if (cardId.includes("BFM")) sub = "BFM";
+    if (cardId.includes("BFM"))  sub = "BFM";
     else if (cardId.includes("ABFM")) sub = "ABFM";
     else if (cardId.includes("BRBL")) sub = "BRBL";
     else if (cardId.includes("L-Risk") || cardId.includes("Risk")) sub = "Risk";
 
-    // Treat active elective generic
     if (sub === "Risk" && electiveId !== "Risk") sub = electiveId;
 
     const strength = Math.min(100, (state.repetitions * 20) + (state.easeFactor * 10));
@@ -252,191 +211,127 @@ export function calculatePassProbability(userProfile, studyHoursAdjustment = 0) 
     subjectCounts[sub]++;
   });
 
-  // Calculate project marks based on base scores + mastery factor
-  const projectedScores = {};
-  let totalScoreSum = 0;
-  let countSubjects = 5;
-
-  const subjectsList = ["ABM", "BFM", "ABFM", "BRBL", electiveId];
+  const projectedScores  = {};
+  let   totalScoreSum    = 0;
+  const countSubjects    = 5;
+  const subjectsList     = ["ABM", "BFM", "ABFM", "BRBL", electiveId];
 
   subjectsList.forEach(sub => {
-    const base = defaultBaseScores[sub] || defaultBaseScores.Elective;
-    const count = subjectCounts[sub] || 0;
-    const avgM = count > 0 ? (subjectMasteries[sub] / count) : 40; // baseline 40% strength if unreviewed
-
-    // Mastery yields up to +12 marks on baseline, forgetting decreases it by -8
+    const base        = defaultBaseScores[sub] || defaultBaseScores.Elective;
+    const count       = subjectCounts[sub] || 0;
+    const avgM        = count > 0 ? (subjectMasteries[sub] / count) : 40;
     const reviewBonus = ((avgM - 50) / 50) * 10;
 
-    // Add custom adjustments for specific weak/strong subjects declared by user during onboarding
     let onboardAdjust = 0;
-    if (userProfile?.weakSubjects?.includes(sub)) onboardAdjust = -4;
+    if (userProfile?.weakSubjects?.includes(sub))   onboardAdjust = -4;
     if (userProfile?.strongSubjects?.includes(sub)) onboardAdjust = +5;
 
-    // Study allocation boost
-    let hoursBoost = 0;
-    if (studyHoursAdjustment > 0) {
-      // Simulating study allocation (e.g. 10 hours yields +4 marks, scaled)
-      hoursBoost = Math.min(8, studyHoursAdjustment * 1.5);
-    }
+    const hoursBoost = studyHoursAdjustment > 0 ? Math.min(8, studyHoursAdjustment * 1.5) : 0;
 
     let finalProjected = Math.round(base + reviewBonus + onboardAdjust + hoursBoost);
-    finalProjected = Math.max(30, Math.min(95, finalProjected)); // bound between 30 and 95
+    finalProjected     = Math.max(30, Math.min(95, finalProjected));
 
     projectedScores[sub] = finalProjected;
-    totalScoreSum += finalProjected;
+    totalScoreSum       += finalProjected;
   });
 
-  const averageAggregate = parseFloat((totalScoreSum / countSubjects).toFixed(1));
-
-  // CAIIB Pass Criterion:
-  // 1. Min 50 in each subject OR
-  // 2. Min 45 in each subject with an overall aggregate of 50% in a single attempt.
-  let hasFailScore = false; // below 45 is instant fail
-  let hasMarginalScore = false; // between 45 and 49
-  let subjectsBelow50 = [];
+  const averageAggregate  = parseFloat((totalScoreSum / countSubjects).toFixed(1));
+  let hasFailScore        = false;
+  let hasMarginalScore    = false;
+  const subjectsBelow50   = [];
 
   subjectsList.forEach(sub => {
     const score = projectedScores[sub];
-    if (score < 45) {
-      hasFailScore = true;
-      subjectsBelow50.push(sub);
-    } else if (score < 50) {
-      hasMarginalScore = true;
-      subjectsBelow50.push(sub);
-    }
+    if (score < 45)      { hasFailScore     = true; subjectsBelow50.push(sub); }
+    else if (score < 50) { hasMarginalScore = true; subjectsBelow50.push(sub); }
   });
 
-  let probability = 50; // start at 50%
-
-  // Calculate probability dynamics
+  let probability = 50;
   if (hasFailScore) {
-    // Immediate fail hazard
     probability = Math.round(Math.max(15, (averageAggregate - 40) * 3));
   } else if (hasMarginalScore && averageAggregate < 50) {
-    // Failing on aggregate requirement
     probability = Math.round(Math.max(30, (averageAggregate - 45) * 8 + 30));
   } else {
-    // Clearing both thresholds
     const margin = averageAggregate - 50;
-    probability = Math.round(Math.min(99, 70 + (margin * 5)));
+    probability  = Math.round(Math.min(99, 70 + (margin * 5)));
   }
 
-  // Buffer adjustments for daily study plans
   const hoursTarget = parseFloat(userProfile?.studyHours || "2");
-  if (hoursTarget >= 3) probability = Math.min(99, probability + 5);
-  if (hoursTarget < 1.5) probability = Math.max(10, probability - 5);
+  if (hoursTarget >= 3)    probability = Math.min(99, probability + 5);
+  if (hoursTarget <  1.5)  probability = Math.max(10, probability - 5);
 
-  let statusText = "Failing";
-  let statusColor = "#F87171"; // err
-  if (probability >= 75) {
-    statusText = "Safe Passage";
-    statusColor = "#4ADE80"; // ok
-  } else if (probability >= 50) {
-    statusText = "Borderline Risk";
-    statusColor = "#FB923C"; // warn
-  }
+  let statusText  = "Failing";
+  let statusColor = "#F87171";
+  if      (probability >= 75) { statusText = "Safe Passage";    statusColor = "#4ADE80"; }
+  else if (probability >= 50) { statusText = "Borderline Risk"; statusColor = "#FB923C"; }
 
-  return {
-    probability,
-    statusText,
-    statusColor,
-    aggregate: averageAggregate,
-    projectedScores,
-    subjectsBelow50,
-    electiveId
-  };
+  return { probability, statusText, statusColor, aggregate: averageAggregate, projectedScores, subjectsBelow50, electiveId };
 }
 
-// 4. Gemini API Integrations (Step 1 Roadmap)
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. Gemini API integrations — routed through the secure backend.
+//    No API key is ever sent from the browser.
+// ─────────────────────────────────────────────────────────────────────────────
 
-export async function generateAICaseStudy(topicName, apiKey) {
-  if (!apiKey) return null;
-
-  const prompt = `You are an expert tutor for the Indian CAIIB bank exam. Generate a realistic, challenging banking case study or calculation drill for the topic: "${topicName}".
-You must respond with a JSON object of exactly this structure:
-{
-  "title": "A concise title for the case study",
-  "problem": "Detailed scenario parameters, e.g., given RWAs, assets, or finance numbers",
-  "steps": [
-    "Step 1 calculation showing formula and numbers",
-    "Step 2 calculation showing formula and numbers",
-    "Step 3 calculation showing final mathematical resolution"
-  ],
-  "verdict": "Final statutory compliance verdict or project appraisal result",
-  "quiz": {
-    "question": "A multiple choice question testing the user on the case scenario",
-    "opts": ["Option A value", "Option B value", "Option C value", "Option D value"],
-    "correct": 0, // 0-indexed index of correct option
-    "why": "A brief explanation of why the correct option is right based on banking regulations"
-  }
-}
-Return only raw JSON. Do not include markdown code block formatting (like \`\`\`json).`;
-
+export async function generateAICaseStudy(topicName) {
   try {
-    const data = await geminiPost(apiKey, {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" }
+    const res = await fetch('/api/gemini/case-study', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ topicName }),
+      signal:  AbortSignal.timeout(25_000)
     });
-    const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    return JSON.parse(jsonText);
+    if (!res.ok) return null;
+    return await res.json();
   } catch (e) {
-    console.error("Gemini case generation failed, falling back to local procedural:", e);
-    return null;
+    console.error('AI case study fetch error:', e);
+    return null; // caller falls back to generateProceduralNumerical
   }
 }
 
-export async function explainMistake(question, optionSelected, correctOption, whyDetail, apiKey) {
-  if (!apiKey) return "AI explanation requires an active Gemini API key. Double check settings.";
-
-  const prompt = `You are a supportive, fatigue-aware AI tutor for an exhausted banking professional studying for the CAIIB exam.
-They were asked: "${question}"
-They selected the incorrect option: "${optionSelected}"
-The correct option is: "${correctOption}"
-Standard textbook reason: "${whyDetail}"
-
-Explain in 3 short, easy-to-read bullet points:
-1. Why the selected option is incorrect.
-2. The core conceptual rule or formula they missed.
-3. A simple memory trick or shortcut to remember this on exam day under stress.
-
-Keep the total explanation under 150 words. Do not use complex formatting.`;
-
+export async function explainMistake(question, optionSelected, correctOption, whyDetail) {
   try {
-    const data = await geminiPost(apiKey, {
-      contents: [{ parts: [{ text: prompt }] }]
+    const res = await fetch('/api/gemini/explain', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ question, optionSelected, correctOption, whyDetail }),
+      signal:  AbortSignal.timeout(20_000)
     });
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Failed to parse explanation.";
-  } catch (e) {
-    console.error("Gemini mistake explanation failed:", e);
-    return "Error calling AI coach. Check your network or API key.";
-  }
-}
-
-export async function generateStudySchedule(projectedScores, elective, apiKey) {
-  if (!apiKey) {
-    const lowSubjects = Object.entries(projectedScores)
-      .filter(([_, score]) => score < 50)
-      .map(([sub]) => sub);
-    if (lowSubjects.length > 0) {
-      return `Target priority: Focus heavily on ${lowSubjects.join(" and ")} where your projected marks are currently under the 50-mark safety threshold.`;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return data.error || 'AI explanation unavailable. Ensure the backend server is running.';
     }
-    return "Study advisory: Keep reviewing formulas daily in the Revision Inbox to maintain your safe aggregate passing range.";
+    const data = await res.json();
+    return data.explanation || 'Failed to parse explanation from server.';
+  } catch (e) {
+    console.error('Explain mistake error:', e);
+    return 'Error calling AI coach. Ensure the backend server is running (npm run server).';
   }
+}
 
-  const scoresStr = Object.entries(projectedScores).map(([sub, val]) => `${sub}: ${val}`).join(", ");
-  const prompt = `You are a strategic CAIIB exam coach.
-The bank officer has these current projected marks: ${scoresStr} (with elective: ${elective}).
-Write a 2-sentence highly tactical study advice.
-Identify the single weakest paper, tell them exactly what module/formula to focus on, and advise on redistributing daily study hours to maximize aggregate safety.
-Keep it extremely encouraging and under 50 words.`;
+export async function generateStudySchedule(projectedScores, elective) {
+  // Always provide a local fallback so the UI is never empty
+  const localFallback = () => {
+    const lowSubjects = Object.entries(projectedScores)
+      .filter(([, score]) => score < 50)
+      .map(([sub]) => sub);
+    return lowSubjects.length > 0
+      ? `Target priority: Focus heavily on ${lowSubjects.join(' and ')} where projected marks are below the 50-mark safety threshold.`
+      : 'Study advisory: Keep reviewing formulas daily in the Revision Inbox to maintain your safe aggregate passing range.';
+  };
 
   try {
-    const data = await geminiPost(apiKey, {
-      contents: [{ parts: [{ text: prompt }] }]
+    const res = await fetch('/api/gemini/schedule', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ projectedScores, elective }),
+      signal:  AbortSignal.timeout(20_000)
     });
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Review weak subjects daily.";
+    if (!res.ok) return localFallback();
+    const data = await res.json();
+    return data.advisory || localFallback();
   } catch (e) {
-    console.error("Gemini schedule generation failed:", e);
-    return "Review your low-projected subjects to secure your passing margin.";
+    console.error('Schedule generation error:', e);
+    return localFallback();
   }
 }

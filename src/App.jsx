@@ -4,14 +4,14 @@ import {
   BarChart2, FlaskConical, Play, AlertTriangle,
   RotateCcw, Target, Battery, ChevronRight, Star,
   BookMarked, Shield, FileText, RefreshCw, WifiOff,
-  Settings, X, KeyRound
+  Settings, X, KeyRound, CheckCircle2, ServerCrash
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
 import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
-import { getStoredApiKey, setStoredApiKey } from "./utils/keyStore";
+import { checkServerApiStatus } from "./utils/keyStore";
 
 // Component imports
 import Onboarding from "./components/Onboarding";
@@ -37,30 +37,13 @@ export default function App() {
   // Settings drawer
   const [showSettings, setShowSettings] = useState(false);
 
-  // Gemini API states
-  const [apiKey, setApiKey] = useState(getStoredApiKey);
-  const [apiStatus, setApiStatus] = useState("disconnected");
+  // AI backend status — checked on mount via /api/gemini/status
+  // Values: 'checking' | 'active' | 'missing' | 'error' | 'offline'
+  const [apiStatus, setApiStatus] = useState("checking");
 
   useEffect(() => {
-    if (!apiKey) {
-      setApiStatus("disconnected");
-      return;
-    }
-    const verifyKey = async () => {
-      setApiStatus("verifying");
-      try {
-        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
-        });
-        if (res.ok) { setApiStatus("active"); setStoredApiKey(apiKey); }
-        else setApiStatus("error");
-      } catch { setApiStatus("error"); }
-    };
-    const timer = setTimeout(verifyKey, 500);
-    return () => clearTimeout(timer);
-  }, [apiKey]);
+    checkServerApiStatus().then(setApiStatus);
+  }, []);
 
   // Active Subject selection
   const [activeSubject, setActiveSubject] = useState("BFM");
@@ -129,8 +112,6 @@ export default function App() {
       setIsOnboarded(false);
       setUserProfile(null);
       setTab("home");
-      setApiKey("");
-      setApiStatus("disconnected");
       setSessionQueue([]);
       setEnergyMode("low");
       setShowSettings(false);
@@ -206,26 +187,56 @@ export default function App() {
                 </button>
               </div>
 
-              {/* API Key */}
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* AI Features — server-managed key status */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <KeyRound size={14} color={C.accent} />
-                  <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>Gemini API Key</span>
+                  <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>AI Features</span>
                   <div style={{
                     marginLeft: "auto", width: 8, height: 8, borderRadius: "50%",
-                    background: apiStatus === "active" ? C.ok : apiStatus === "verifying" ? C.warn : apiStatus === "error" ? C.err : C.dim
+                    background: apiStatus === "active" ? C.ok : apiStatus === "checking" ? C.warn : apiStatus === "offline" ? C.dim : C.err
                   }} />
                   <span style={{ fontSize: 10, color: C.muted }}>
-                    {apiStatus === "active" ? "Live" : apiStatus === "verifying" ? "Checking…" : apiStatus === "error" ? "Invalid" : "Offline"}
+                    {apiStatus === "active" ? "Live" : apiStatus === "checking" ? "Checking…" : apiStatus === "missing" ? "Key missing" : apiStatus === "offline" ? "Server offline" : "Error"}
                   </span>
                 </div>
-                <input type="password" placeholder="Paste your Gemini API key" value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+
+                {/* Status chip */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: apiStatus === "active" ? `${C.ok}15` : apiStatus === "offline" ? `${C.warn}15` : `${C.err}15`,
+                  border: `1px solid ${apiStatus === "active" ? `${C.ok}44` : apiStatus === "offline" ? `${C.warn}44` : `${C.err}44`}`,
+                  borderRadius: 8, padding: "8px 12px"
+                }}>
+                  {apiStatus === "active"
+                    ? <CheckCircle2 size={13} color={C.ok} />
+                    : apiStatus === "offline"
+                      ? <WifiOff size={13} color={C.warn} />
+                      : <ServerCrash size={13} color={C.err} />}
+                  <span style={{ fontSize: 11, fontWeight: 600, color: apiStatus === "active" ? C.ok : apiStatus === "offline" ? C.warn : C.err }}>
+                    {apiStatus === "active"
+                      ? "Backend connected · Gemini API key active"
+                      : apiStatus === "offline"
+                        ? "Backend server not running"
+                        : apiStatus === "missing"
+                          ? "GEMINI_API_KEY not set in server .env"
+                          : "Could not reach Gemini API"}
+                  </span>
+                </div>
+
+                <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>
+                  The API key lives exclusively in the server .env file — it is never sent to the browser. Start the server with <code style={{ color: C.accent, fontSize: 10 }}>npm run server</code> to enable AI case studies, coaching, and strategic advice.
+                </p>
+
+                <button
+                  onClick={() => { setApiStatus("checking"); checkServerApiStatus().then(setApiStatus); }}
                   style={{
-                    background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8,
-                    color: C.text, fontSize: 13, padding: "8px 10px", outline: "none", width: "100%"
-                  }} />
-                <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>Key sent via request header — never embedded in URLs. AI case studies and coaching activate when key is valid.</p>
+                    background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 8,
+                    padding: "7px 12px", color: C.muted, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", alignSelf: "flex-start"
+                  }}>
+                  Re-check connection
+                </button>
               </div>
 
               {/* DB info */}
@@ -243,6 +254,22 @@ export default function App() {
                 Reset All Progress & Onboarding
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── Server-offline banner — shown when AI backend is unreachable ── */}
+        {isOnboarded && tab !== "study_session" && apiStatus === "offline" && (
+          <div style={{
+            background: `${C.warn}18`, border: `1px solid ${C.warn}44`,
+            padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0
+          }}>
+            <WifiOff size={13} color={C.warn} />
+            <span style={{ color: C.warn, fontSize: 11, fontWeight: 600 }}>
+              AI features unavailable — backend server is offline.
+            </span>
+            <span style={{ color: C.muted, fontSize: 11, marginLeft: 2 }}>
+              Run: <code style={{ color: C.accent, fontSize: 10 }}>npm run server</code>
+            </span>
           </div>
         )}
 
@@ -460,7 +487,7 @@ export default function App() {
 
               {/* PASS OPTIMIZER SCREEN */}
               {tab === "strategy" && (
-                <PassOptimizer userProfile={userProfile} activeElective={userProfile?.elective} apiKey={apiKey}
+                <PassOptimizer userProfile={userProfile} activeElective={userProfile?.elective}
                   onReviseWeakness={(lessonId) => {
                     const lesson = MICRO_LESSONS.find(l => l.id === lessonId);
                     if (lesson) handleStartStudySession([lesson], "rapid");
@@ -474,7 +501,7 @@ export default function App() {
 
               {/* ACTIVE STUDY SESSION CONTAINER */}
               {tab === "study_session" && (
-                <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab} apiKey={apiKey}
+                <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab}
                   onSessionComplete={() => {
                     alert("🎓 Study session complete! Progress logged and synced locally.");
                     setTab("home");

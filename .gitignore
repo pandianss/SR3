@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Scraper output (generated at runtime)
 src/data/newIngestedCirculars.json
+
+# Server runtime cache — regenerated on every start
+server/cache/*.json

@@ -6,7 +6,7 @@ import NumericalCalculator from "./NumericalCalculator";
 import { Clock, Calculator, Edit3, CheckCircle, AlertTriangle, Zap, Volume2, Sparkles, BookOpen } from "lucide-react";
 import { C } from "../theme";
 
-export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode, setTab, apiKey }) {
+export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode, setTab }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSubStep, setCurrentSubStep] = useState(0); // 0: Concept, 1: Pillars, 2: Scenario, 3: Quiz, 4: Rating
   const [pickedOpt, setPickedOpt] = useState(null);
@@ -62,20 +62,19 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode
 
       const loadCaseData = async () => {
         setAiCaseLoading(true);
-        if (apiKey) {
-          try {
-            const aiCase = await generateAICaseStudy(item.title, apiKey);
-            if (aiCase) {
-              setProceduralMath(aiCase);
-              setAiCaseLoading(false);
-              return;
-            }
-          } catch (e) {
-            console.error("AI case study fetch error, using procedural fallback", e);
+        try {
+          // Always try the backend first; returns null on any failure
+          const aiCase = await generateAICaseStudy(item.title);
+          if (aiCase) {
+            setProceduralMath(aiCase);
+            setAiCaseLoading(false);
+            return;
           }
+        } catch (e) {
+          console.error("AI case study fetch error, using procedural fallback", e);
         }
 
-        // Fallback to local procedural randomized math
+        // Fallback to local procedural randomised math
         const math = generateProceduralNumerical(item.topicId);
         setProceduralMath(math);
         setAiCaseLoading(false);
@@ -91,7 +90,7 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode
         timerRef.current = null;
       }
     };
-  }, [currentIndex, item, energyMode, apiKey]);
+  }, [currentIndex, item, energyMode]);
 
   const handleAskAICoach = async () => {
     setLoadingExplanation(true);
@@ -101,8 +100,7 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, energyMode
         quizStep.question,
         quizStep.opts[pickedOpt],
         quizStep.opts[quizStep.correct],
-        quizStep.why,
-        apiKey
+        quizStep.why
       );
       setAiExplanation(responseText);
     } catch (e) {
