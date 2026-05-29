@@ -157,34 +157,38 @@ async function runPipeline() {
   const allNotifications = await scrapeRBIPage();
   const MAX_PER_RUN = parseInt(process.env.RBI_MAX_ITEMS || "20", 10);
 
-  // Read existing IDs to skip already-ingested circulars
+  // Read existing DB — keep old records and their IDs for deduplication
   const outputPath = path.resolve("./src/data/ingestedCirculars.json");
+  let existingRecords = [];
   let existingIds = new Set();
   try {
-    const existing = JSON.parse(fs.readFileSync(outputPath, "utf8"));
-    existingIds = new Set(existing.map(c => c.id));
+    existingRecords = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+    existingIds = new Set(existingRecords.map(c => c.id));
   } catch (_) {}
 
-  // Only process new items, capped after deduplication
+  // Only process new items (not already in DB), capped after deduplication
   const rawNotifications = allNotifications
     .filter(n => !existingIds.has(n.id))
     .slice(0, MAX_PER_RUN);
 
-  console.log(`[Pipeline] ${rawNotifications.length} new notifications to process (${allNotifications.length - rawNotifications.length} skipped as already ingested).`);
-  const processedDatabase = [];
+  console.log(`[Pipeline] ${rawNotifications.length} new notifications to process (${existingIds.size} already in DB).`);
+  const newlyProcessed = [];
 
   for (const notification of rawNotifications) {
     const processedItem = await classifyWithGemini(notification, GEMINI_API_KEY);
     if (processedItem) {
-      processedDatabase.push(processedItem);
+      newlyProcessed.push(processedItem);
       console.log(`[Sync] Mapped Notification ${processedItem.id} -> Subject: ${processedItem.subjectId} | Topic: ${processedItem.topicId || "None"}`);
     }
   }
 
-  // Save to the JSON file
+  // Merge: new items first (most recent at top), then existing records
+  const mergedDatabase = [...newlyProcessed, ...existingRecords];
+
+  // Save merged DB to the JSON file
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, JSON.stringify(processedDatabase, null, 2) + "\n", "utf8");
-  console.log(`[Database] Ingestion complete. ${processedDatabase.length} circulars written to: ${outputPath}`);
+  fs.writeFileSync(outputPath, JSON.stringify(mergedDatabase, null, 2) + "\n", "utf8");
+  console.log(`[Database] Ingestion complete. ${newlyProcessed.length} new + ${existingRecords.length} existing = ${mergedDatabase.length} total circulars written to: ${outputPath}`);
   console.log("=================================================");
 }
 

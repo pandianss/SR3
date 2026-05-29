@@ -142,7 +142,7 @@ export default function App() {
       <div style={{ width: "100%", maxWidth: 480, minHeight: "100vh", display: "flex", flexDirection: "column", background: C.surf, position: "relative" }}>
 
         {/* ── Top App Bar ── */}
-        {isOnboarded && tab !== "study_session" && (
+        {isOnboarded && tab !== "study_session" && tab !== "session_complete" && (
           <div style={{
             background: C.surf, borderBottom: `1px solid ${C.border}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -359,20 +359,31 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Continue Study Block */}
-                  <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 14, marginBottom: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                      <div>
-                        <span style={{ color: C.muted, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>UP NEXT</span>
-                        <h4 style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: "2px 0" }}>Basel III Framework</h4>
-                        <span style={{ fontSize: 9, background: `${C.blue}20`, color: C.blue, padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>BFM · Module B</span>
+                  {/* Continue Study Block — reflects active subject */}
+                  {(() => {
+                    const subjectLessons = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
+                    const nextLesson = subjectLessons[0];
+                    const subjectMeta = SUBJECTS.concat(ELECTIVES).find(s => s.id === activeSubject);
+                    const firstModule = (MODULES[activeSubject] || [])[0];
+                    if (!nextLesson) return null;
+                    return (
+                      <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 14, marginBottom: 20 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                          <div style={{ flex: 1, overflow: "hidden", marginRight: 12 }}>
+                            <span style={{ color: C.muted, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>UP NEXT · {subjectMeta?.label || activeSubject}</span>
+                            <h4 style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: "2px 0", textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{nextLesson.title}</h4>
+                            <span style={{ fontSize: 9, background: `${subjectMeta?.color || C.blue}20`, color: subjectMeta?.color || C.blue, padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
+                              {activeSubject} · {firstModule?.name?.replace(/Module [A-Z]: /, "") || "Module A"}
+                            </span>
+                          </div>
+                          <button onClick={() => handleLaunchTopicLesson(nextLesson.topicId)}
+                            style={{ background: C.accent, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Play size={16} color="#000" fill="#000" style={{ marginLeft: 2 }} />
+                          </button>
+                        </div>
                       </div>
-                      <button onClick={() => handleLaunchTopicLesson("T-BFM-B1")}
-                        style={{ background: C.accent, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Play size={16} color="#000" fill="#000" style={{ marginLeft: 2 }} />
-                      </button>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* Pass Probability Snapshot */}
                   <div onClick={() => setTab("strategy")}
@@ -509,6 +520,36 @@ export default function App() {
                   }} />
               )}
 
+              {/* SESSION COMPLETE SCREEN */}
+              {tab === "session_complete" && (
+                <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px", textAlign: "center", gap: 20 }}>
+                  <div style={{ fontSize: 56, lineHeight: 1 }}>🎓</div>
+                  <div>
+                    <h2 style={{ color: C.text, fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Session Complete!</h2>
+                    <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+                      Progress logged and synced locally.<br />Your SM-2 intervals have been updated.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 280 }}>
+                    <button onClick={() => { setTab("home"); }}
+                      style={{ background: C.accent, border: "none", borderRadius: 12, padding: "13px 20px", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                      Back to Dashboard
+                    </button>
+                    <button onClick={() => {
+                      const list = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
+                      handleStartStudySession(list.length > 0 ? list : MICRO_LESSONS, energyMode);
+                    }}
+                      style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "13px 20px", color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      Study {activeSubject} Again →
+                    </button>
+                    <button onClick={() => setTab("revision")}
+                      style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", padding: "4px 0" }}>
+                      Open Revision Inbox
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* RBI CIRCULARS SCREEN */}
               {tab === "circulars" && (
                 <Circulars onNavigateToLesson={(topicId) => handleLaunchTopicLesson(topicId)} />
@@ -517,17 +558,14 @@ export default function App() {
               {/* ACTIVE STUDY SESSION CONTAINER */}
               {tab === "study_session" && (
                 <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab}
-                  onSessionComplete={() => {
-                    alert("🎓 Study session complete! Progress logged and synced locally.");
-                    setTab("home");
-                  }} />
+                  onSessionComplete={() => setTab("session_complete")} />
               )}
             </>
           )}
         </div>
 
         {/* ── Bottom Tab Bar ── */}
-        {isOnboarded && tab !== "study_session" && (
+        {isOnboarded && tab !== "study_session" && tab !== "session_complete" && (
           <div style={{
             background: C.surf, borderTop: `1.5px solid ${C.border}`,
             display: "flex", padding: `8px 0 calc(12px + env(safe-area-inset-bottom, 0px))`,
