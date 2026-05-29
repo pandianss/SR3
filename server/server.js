@@ -14,7 +14,7 @@ const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
 // ── Security & performance middleware ─────────────────────────────────────────
 app.use(helmet({
-  // Allow the Vite dev proxy (cross-origin during development) to reach the API
+  // Allow the Vite dev proxy (cross-origin in development) to reach the API
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 app.use(compression());
@@ -22,16 +22,20 @@ app.use(cors({
   origin:      process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   credentials: false
 }));
-// Parse JSON bodies — 10 KB hard cap prevents request-body DoS
+// Hard-cap request bodies to prevent DoS via oversized payloads
 app.use(express.json({ limit: '10kb' }));
 
 // ── Global rate limit applied to every /api/* route ───────────────────────────
 app.use('/api', globalLimiter);
 
-// ── Shared-secret guard (transparent when INTERNAL_TOKEN is not set) ──────────
+// ── Shared-secret guard (transparent when INTERNAL_TOKEN is not configured) ───
+// The Vite dev proxy injects X-Internal-Token automatically so the browser
+// never sees the secret.  Skipped entirely when INTERNAL_TOKEN is not set.
 app.use('/api', requireInternalToken);
 
-// ── Route mounting ────────────────────────────────────────────────────────────
+// ── Route modules ─────────────────────────────────────────────────────────────
+// server/routes/gemini.js   — LRU cache, in-flight dedup, per-endpoint rate limits
+// server/routes/circulars.js — background scraper, file cache, force-refresh
 app.use('/api/gemini',    geminiRouter);
 app.use('/api/circulars', circularsRouter);
 
@@ -57,7 +61,7 @@ const server = app.listen(PORT, () => {
   console.log(`[Server] CORS origin    : ${process.env.CORS_ORIGIN ?? 'http://localhost:5173'}`);
   console.log(`[Server] Auth token     : ${process.env.INTERNAL_TOKEN ? '✓ active' : '— disabled (dev mode)'}\n`);
 
-  // Start the background RBI circular scraper (non-blocking)
+  // Start the background RBI circular scraper (non-blocking fire-and-forget)
   startBackgroundScraper();
 });
 
@@ -68,7 +72,7 @@ function shutdown(signal) {
     console.log('[Server] All connections drained. Goodbye.');
     process.exit(0);
   });
-  // Force-exit after 10 s if connections don't drain
+  // Force-exit after 10 s if connections don't drain in time
   setTimeout(() => {
     console.error('[Server] Forcing exit after timeout.');
     process.exit(1);

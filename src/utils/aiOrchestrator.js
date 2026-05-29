@@ -285,12 +285,13 @@ export async function generateAICaseStudy(topicName) {
     return await res.json();
   } catch (e) {
     console.error('AI case study fetch error:', e);
-    return null; // caller falls back to generateProceduralNumerical
+    return null;
   }
 }
 
 export async function explainMistake(question, optionSelected, correctOption, whyDetail) {
   try {
+    // Centralized Gemini requests are now proxied securely through our backend server.
     const res = await fetch('/api/gemini/explain', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -329,7 +330,8 @@ export async function generateStudySchedule(projectedScores, elective) {
     });
     if (!res.ok) return localFallback();
     const data = await res.json();
-    return data.advisory || localFallback();
+    // Accept both 'advisory' (current) and 'schedule' (legacy field name)
+    return data.advisory || data.schedule || localFallback();
   } catch (e) {
     console.error('Schedule generation error:', e);
     return localFallback();

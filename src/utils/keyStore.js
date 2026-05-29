@@ -23,6 +23,8 @@ export async function checkServerApiStatus() {
     });
     if (!res.ok) return 'error';
     const data = await res.json();
+    // Normalise legacy 'disconnected' to 'missing' in case of older server builds
+    if (data.status === 'disconnected') return 'missing';
     return data.status ?? 'error'; // 'active' | 'missing' | 'error'
   } catch {
     return 'offline';
