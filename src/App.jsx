@@ -37,8 +37,7 @@ export default function App() {
   // Settings drawer
   const [showSettings, setShowSettings] = useState(false);
 
-  // AI backend status — checked on mount via /api/gemini/status
-  // Values: 'checking' | 'active' | 'missing' | 'error' | 'offline'
+  // AI backend status — 'checking' | 'active' | 'missing' | 'error' | 'offline'
   const [apiStatus, setApiStatus] = useState("checking");
 
   useEffect(() => {
@@ -112,6 +111,7 @@ export default function App() {
       setIsOnboarded(false);
       setUserProfile(null);
       setTab("home");
+      setApiStatus("disconnected");
       setSessionQueue([]);
       setEnergyMode("low");
       setShowSettings(false);
@@ -188,7 +188,7 @@ export default function App() {
               </div>
 
               {/* AI Features — server-managed key status */}
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <KeyRound size={14} color={C.accent} />
                   <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>AI Features</span>
@@ -201,7 +201,6 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Status chip */}
                 <div style={{
                   display: "flex", alignItems: "center", gap: 8,
                   background: apiStatus === "active" ? `${C.ok}15` : apiStatus === "offline" ? `${C.warn}15` : `${C.err}15`,
