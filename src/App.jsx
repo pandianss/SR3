@@ -29,9 +29,6 @@ export default function App() {
   // null = not yet resolved, false = signed out, object = Firebase user
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [authResolved, setAuthResolved] = useState(false);
-  const [skippedAuth, setSkippedAuth] = useState(
-    () => localStorage.getItem("caiib_skip_auth") === "true"
-  );
 
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -177,14 +174,9 @@ export default function App() {
     );
   }
 
-  // Show auth screen if Firebase is configured and user is not signed in and hasn't skipped
-  if (isConfigured && !firebaseUser && !skippedAuth) {
-    return (
-      <AuthScreen onSkip={() => {
-        localStorage.setItem("caiib_skip_auth", "true");
-        setSkippedAuth(true);
-      }} />
-    );
+  // Show auth screen if Firebase is configured and user is not signed in
+  if (isConfigured && !firebaseUser) {
+    return <AuthScreen />;
   }
 
   return (
@@ -260,7 +252,7 @@ export default function App() {
                     <p style={{ color: C.text, fontWeight: 600, fontSize: 13, margin: 0, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{firebaseUser.displayName || "Signed in"}</p>
                     <p style={{ color: C.muted, fontSize: 11, margin: 0, textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{firebaseUser.email}</p>
                   </div>
-                  <button onClick={() => { signOutUser(); setFirebaseUser(null); setSkippedAuth(false); localStorage.removeItem("caiib_skip_auth"); }}
+                  <button onClick={() => { signOutUser(); setFirebaseUser(null); }}
                     style={{ background: `${C.err}18`, border: `1px solid ${C.err}44`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, color: C.err, fontSize: 11, fontWeight: 600 }}>
                     <LogOut size={13} /> Sign out
                   </button>
@@ -269,7 +261,7 @@ export default function App() {
                 <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
                   <User size={16} color={C.dim} />
                   <span style={{ color: C.muted, fontSize: 12, flex: 1 }}>Offline mode — progress stored locally only</span>
-                  <button onClick={() => { setSkippedAuth(false); localStorage.removeItem("caiib_skip_auth"); setShowSettings(false); }}
+                  <button onClick={() => setShowSettings(false)}
                     style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700 }}>
                     Sign in
                   </button>

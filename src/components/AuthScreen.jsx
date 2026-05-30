@@ -3,7 +3,7 @@ import { signInWithGoogle, isConfigured } from "../utils/firebase";
 import { Shield, AlertTriangle } from "lucide-react";
 import { C, font } from "../theme";
 
-export default function AuthScreen({ onSkip }) {
+export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
@@ -98,13 +98,6 @@ export default function AuthScreen({ onSkip }) {
         {error && (
           <p style={{ color: C.err, fontSize: 12, textAlign: "center", margin: 0 }}>{error}</p>
         )}
-
-        {/* Skip / offline mode */}
-        <button
-          onClick={onSkip}
-          style={{ background: "none", border: "none", color: C.dim, fontSize: 12, cursor: "pointer", padding: "4px 0" }}>
-          Continue without account (offline mode)
-        </button>
 
         <p style={{ color: C.dim, fontSize: 10, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
           By signing in you agree to our Privacy Policy and Terms of Service.
