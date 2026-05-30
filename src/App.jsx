@@ -5,7 +5,7 @@ import {
   RotateCcw, Target, Battery, ChevronRight, Star,
   BookMarked, Shield, FileText, RefreshCw, WifiOff,
   Settings, X, KeyRound, CheckCircle2, ServerCrash,
-  LogOut, User
+  LogOut, User, PenLine
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
@@ -30,6 +30,7 @@ import StudyPanel from "./components/StudyPanel";
 import RevisionInbox from "./components/RevisionInbox";
 import PassOptimizer from "./components/PassOptimizer";
 import Circulars from "./components/Circulars";
+import PracticeQuiz from "./components/PracticeQuiz";
 
 export default function App() {
   // ── Auth state ──────────────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ export default function App() {
                 <span style={{ color: C.dim, fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{SERIES.name}</span>
                 <span style={{ color: C.accent, fontWeight: 800, fontSize: 13, letterSpacing: "0.04em" }}>{APP.exam}</span>
               </div>
-              <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
+              <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "practice" ? "Practice" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {/* Sync status */}
@@ -837,6 +838,15 @@ export default function App() {
                 </div>
               )}
 
+              {/* PRACTICE QUIZ SCREEN */}
+              {tab === "practice" && (
+                <PracticeQuiz
+                  userProfile={userProfile}
+                  isPremium={isPremium}
+                  onPaywall={setPaywallTrigger}
+                />
+              )}
+
               {/* RBI CIRCULARS SCREEN */}
               {tab === "circulars" && (
                 <Circulars onNavigateToLesson={(topicId) => handleLaunchTopicLesson(topicId)} />
@@ -868,11 +878,11 @@ export default function App() {
             flexShrink: 0, zIndex: 20, position: "sticky", bottom: 0
           }}>
             {[
-              { id: "home", Icon: Home, label: "Home" },
-              { id: "study", Icon: BookOpen, label: "Explore" },
+              { id: "home",     Icon: Home,     label: "Home" },
+              { id: "study",    Icon: BookOpen,  label: "Explore" },
+              { id: "practice", Icon: PenLine,   label: "Practice" },
               { id: "revision", Icon: RotateCcw, label: "Inbox" },
-              { id: "strategy", Icon: BarChart2, label: "Strategy" },
-              { id: "circulars", Icon: FileText, label: "Circulars" }
+              { id: "strategy", Icon: BarChart2, label: "Strategy" }
             ].map(it => {
               const active = tab === it.id;
               return (
