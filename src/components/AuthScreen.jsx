@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { signInWithGoogle, isConfigured } from "../utils/firebase";
-import { Shield, AlertTriangle } from "lucide-react";
+import { Shield, AlertTriangle, Tag } from "lucide-react";
 import { C, font } from "../theme";
 
-export default function AuthScreen() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+export default function AuthScreen({ onSignedIn }) {
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState("");
+  const [referralInput, setReferralInput] = useState("");
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError("");
     try {
-      await signInWithGoogle();
-      // onAuthStateChanged in App.jsx handles the rest
+      const user = await signInWithGoogle();
+      // Pass referral code up so App.jsx can link it after profile creation
+      if (user && onSignedIn) onSignedIn(user, referralInput.trim().toUpperCase());
     } catch (err) {
       setError(err.message || "Sign-in failed. Please try again.");
       setLoading(false);
@@ -52,6 +54,25 @@ export default function AuthScreen() {
               color: C.muted, fontWeight: 500
             }}>{f}</span>
           ))}
+        </div>
+
+        {/* Optional referral code */}
+        <div style={{ width: "100%", position: "relative" }}>
+          <Tag size={14} color={C.muted} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            type="text"
+            placeholder="Referral code (optional)"
+            value={referralInput}
+            onChange={e => setReferralInput(e.target.value.toUpperCase())}
+            maxLength={8}
+            style={{
+              width: "100%", background: C.card, border: `1.5px solid ${C.border}`,
+              borderRadius: 12, padding: "13px 14px 13px 38px",
+              color: C.text, fontSize: 13, fontFamily: "inherit",
+              letterSpacing: "0.1em", outline: "none",
+              boxSizing: "border-box"
+            }}
+          />
         </div>
 
         {/* Sign-in button */}

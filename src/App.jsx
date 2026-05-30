@@ -15,6 +15,7 @@ import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
 import { subscribeToAuthState, signOutUser, isConfigured } from "./utils/firebase";
 import { syncRead, syncWrite } from "./utils/syncStore";
+import { generateReferralCode, registerReferralCode, linkReferral, getReferralStats } from "./utils/referral";
 
 // Component imports
 import Onboarding from "./components/Onboarding";
@@ -62,6 +63,9 @@ export default function App() {
   const [checkpoint, setCheckpoint] = useState(null);
   const [resumeIndex, setResumeIndex] = useState(0);
 
+  // Referral
+  const [referralStats, setReferralStats] = useState(null);
+
   // ── Bootstrap: auth listener + cloud sync ──────────────────────────────────
   useEffect(() => {
     seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
@@ -77,6 +81,11 @@ export default function App() {
       if (profile) {
         setUserProfile(profile);
         setIsOnboarded(true);
+
+        // Load referral stats if user has a code
+        if (profile.referralCode) {
+          getReferralStats(uid, profile.referralCode).then(setReferralStats);
+        }
       } else {
         const onboarded = localStorage.getItem("caiib_onboarded") === "true";
         if (onboarded) {
@@ -94,13 +103,43 @@ export default function App() {
     return unsub;
   }, []);
 
-  const handleOnboardingComplete = (profile) => {
-    setUserProfile(profile);
+  // Called by AuthScreen after Google sign-in — stores pending referral code
+  const [pendingReferralCode, setPendingReferralCode] = useState("");
+  const handleSignedIn = (_user, referralCode) => {
+    if (referralCode) setPendingReferralCode(referralCode);
+    // onAuthStateChanged fires automatically and drives the rest of the flow
+  };
+
+  const handleOnboardingComplete = async (profile) => {
+    const uid = firebaseUser?.uid ?? null;
+
+    // Generate a referral code for this user on first onboarding
+    let referralCode = profile.referralCode;
+    if (!referralCode && uid) {
+      referralCode = await generateReferralCode(firebaseUser?.displayName || "");
+      await registerReferralCode(uid, referralCode);
+    }
+
+    const enrichedProfile = { ...profile, referralCode };
+    setUserProfile(enrichedProfile);
     setIsOnboarded(true);
     const profileToMode = { commute: "low", night: "focus", morning: "rapid" };
     setEnergyMode(profileToMode[profile.energyProfile] || "low");
-    // Persist profile locally + to Firestore
-    syncWrite(firebaseUser?.uid ?? null, "profile", "caiib_user_profile", profile);
+
+    // Persist enriched profile
+    syncWrite(uid, "profile", "caiib_user_profile", enrichedProfile);
+
+    // Link referral if one was entered at sign-in
+    if (pendingReferralCode && uid) {
+      const linked = await linkReferral(uid, pendingReferralCode);
+      if (linked) setPendingReferralCode("");
+    }
+
+    // Load referral stats
+    if (referralCode && uid) {
+      getReferralStats(uid, referralCode).then(setReferralStats);
+    }
+
     setTab("home");
   };
 
@@ -176,7 +215,7 @@ export default function App() {
 
   // Show auth screen if Firebase is configured and user is not signed in
   if (isConfigured && !firebaseUser) {
-    return <AuthScreen />;
+    return <AuthScreen onSignedIn={handleSignedIn} />;
   }
 
   return (
@@ -318,6 +357,63 @@ export default function App() {
                   Re-check connection
                 </button>
               </div>
+
+              {/* Referral programme */}
+              {userProfile?.referralCode && (
+                <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <BookMarked size={14} color={C.accent} />
+                    <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>Your Referral Code</span>
+                    <span style={{ marginLeft: "auto", fontSize: 10, color: C.teal, fontWeight: 600 }}>15% commission</span>
+                  </div>
+
+                  {/* Code pill + copy */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, background: C.cardAlt, border: `1.5px solid ${C.accent}44`, borderRadius: 10, padding: "10px 14px", textAlign: "center" }}>
+                      <span style={{ color: C.accent, fontWeight: 800, fontSize: 20, letterSpacing: "0.18em", fontFamily: "monospace" }}>
+                        {userProfile.referralCode}
+                      </span>
+                    </div>
+                    <button onClick={() => {
+                      navigator.clipboard.writeText(userProfile.referralCode);
+                    }} style={{ background: C.accent, border: "none", borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                      Copy
+                    </button>
+                  </div>
+
+                  {/* Share message */}
+                  <button onClick={() => {
+                    const msg = `📚 I'm using CAIIB Prep for my exam — use my code ${userProfile.referralCode} to sign up! https://play.google.com/store/apps/details?id=com.superrecall.caiib`;
+                    if (navigator.share) {
+                      navigator.share({ title: "CAIIB Prep", text: msg });
+                    } else {
+                      navigator.clipboard.writeText(msg);
+                    }
+                  }} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer", color: C.text, fontSize: 12, fontWeight: 600 }}>
+                    📤 Share & Earn
+                  </button>
+
+                  {/* Stats */}
+                  {referralStats && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {[
+                        { label: "Referred", value: referralStats.totalReferred },
+                        { label: "Earned", value: `₹${referralStats.totalCommissionEarned.toFixed(0)}` },
+                        { label: "Pending payout", value: `₹${referralStats.unpaidCommission.toFixed(0)}` },
+                      ].map(s => (
+                        <div key={s.label} style={{ flex: 1, background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+                          <p style={{ color: C.text, fontWeight: 700, fontSize: 14, margin: 0 }}>{s.value}</p>
+                          <p style={{ color: C.muted, fontSize: 9, margin: "2px 0 0", textTransform: "uppercase" }}>{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <p style={{ color: C.dim, fontSize: 10, margin: 0, lineHeight: 1.5 }}>
+                    You earn 15% of every purchase made by users who sign up with your code. Payouts via UPI — contact support once your balance exceeds ₹100.
+                  </p>
+                </div>
+              )}
 
               {/* DB info */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
