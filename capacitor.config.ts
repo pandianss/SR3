@@ -4,7 +4,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 const config: CapacitorConfig = {
   appId: 'com.superrecall.caiib',
-  appName: 'CAIIB Prep',
+  appName: 'SuperRecall - CAIIB',
   webDir: 'dist',
 
   // In development, point the WebView at the Vite dev server so hot-reload works.

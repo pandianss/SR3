@@ -1,5 +1,6 @@
 import { C, font } from "../theme";
 import { ArrowLeft } from "lucide-react";
+import { APP, SERIES } from "../brand";
 
 const Section = ({ title, children }) => (
   <div style={{ marginBottom: 24 }}>
@@ -33,7 +34,7 @@ export default function TermsOfService({ onBack }) {
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 40px" }}>
           <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.7, marginBottom: 24 }}>
-            These Terms of Service ("Terms") govern your use of the <strong style={{ color: C.text }}>CAIIB Prep</strong> application operated by SuperRecall ("we", "us"). By creating an account, you agree to these Terms. If you do not agree, do not use the App.
+            These Terms of Service ("Terms") govern your use of <strong style={{ color: C.text }}>{APP.name}</strong> operated by {SERIES.name} ("{`we`}", "{`us`}"). By creating an account, you agree to these Terms. If you do not agree, do not use the App.
           </p>
 
           <Section title="1. The Service">
@@ -118,9 +119,9 @@ export default function TermsOfService({ onBack }) {
 
           <Section title="12. Contact">
             <p>
-              <strong style={{ color: C.text }}>Email:</strong> <a href="mailto:support@superrecall.in" style={{ color: C.accent }}>support@superrecall.in</a><br />
-              <strong style={{ color: C.text }}>Company:</strong> SuperRecall<br />
-              <strong style={{ color: C.text }}>App:</strong> CAIIB Prep (com.superrecall.caiib)
+              <strong style={{ color: C.text }}>Email:</strong> <a href={`mailto:${SERIES.email.support}`} style={{ color: C.accent }}>{SERIES.email.support}</a><br />
+              <strong style={{ color: C.text }}>Company:</strong> {SERIES.company}<br />
+              <strong style={{ color: C.text }}>App:</strong> {APP.name} ({APP.packageId})
             </p>
           </Section>
         </div>

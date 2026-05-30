@@ -2,6 +2,7 @@ import { useState } from "react";
 import { signInWithGoogle, isConfigured } from "../utils/firebase";
 import { Shield, AlertTriangle, Tag } from "lucide-react";
 import { C, font } from "../theme";
+import { APP, SERIES } from "../brand";
 import PrivacyPolicy from "./PrivacyPolicy";
 import TermsOfService from "./TermsOfService";
 
@@ -44,7 +45,8 @@ export default function AuthScreen({ onSignedIn }) {
           }}>
             <Shield size={32} color={C.accent} />
           </div>
-          <h1 style={{ color: C.text, fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>CAIIB Prep</h1>
+          <p style={{ color: C.accent, fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 4px" }}>{SERIES.name}</p>
+          <h1 style={{ color: C.text, fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>{APP.exam} Prep</h1>
           <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
             Sign in to sync your progress across devices.<br />
             Your SM-2 data, streak, and session are always saved.

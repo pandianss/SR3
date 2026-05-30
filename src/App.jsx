@@ -14,6 +14,7 @@ import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
 import { subscribeToAuthState, signOutUser, isConfigured } from "./utils/firebase";
+import { APP, SERIES } from "./brand";
 import { syncRead, syncWrite } from "./utils/syncStore";
 import { generateReferralCode, registerReferralCode, linkReferral, getReferralStats } from "./utils/referral";
 import { loadSubscriptionStatus, canUseMode, canStudySubject, FREE_SUBJECTS, FREE_DAILY_CARD_LIMIT } from "./utils/subscription";
@@ -266,7 +267,10 @@ export default function App() {
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Shield size={16} color={C.accent} />
-              <span style={{ color: C.accent, fontWeight: 800, fontSize: 13, letterSpacing: "0.05em" }}>CAIIB</span>
+              <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+                <span style={{ color: C.dim, fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{SERIES.name}</span>
+                <span style={{ color: C.accent, fontWeight: 800, fontSize: 13, letterSpacing: "0.04em" }}>{APP.exam}</span>
+              </div>
               <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -497,7 +501,7 @@ export default function App() {
                       Welcome back, {roleLabel} 👋
                     </p>
                     <h1 style={{ color: C.text, fontSize: 22, fontWeight: 800, lineHeight: 1.2, margin: 0 }}>
-                      CAIIB Preparation Dashboard
+                      {APP.exam} Preparation
                     </h1>
                     <p style={{ color: C.accent, fontSize: 12, marginTop: 4, fontWeight: 600 }}>
                       🎯 Target Elective: {userProfile?.elective ? ELECTIVES.find(e => e.id === userProfile.elective)?.name : "Risk Management"}

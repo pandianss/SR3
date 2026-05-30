@@ -1,5 +1,6 @@
 import { C, font } from "../theme";
 import { ArrowLeft } from "lucide-react";
+import { APP, SERIES } from "../brand";
 
 const Section = ({ title, children }) => (
   <div style={{ marginBottom: 24 }}>
@@ -33,7 +34,7 @@ export default function PrivacyPolicy({ onBack }) {
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 20px 40px" }}>
           <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.7, marginBottom: 24 }}>
-            SuperRecall ("we", "us", "our") operates the <strong style={{ color: C.text }}>CAIIB Prep</strong> mobile application ("App"). This Privacy Policy explains how we collect, use, and protect your information when you use our App. By signing in, you agree to this policy.
+            {SERIES.name} ("{`we`}", "{`us`}", "{`our`}") operates the <strong style={{ color: C.text }}>{APP.name}</strong> mobile application ("App"). This Privacy Policy explains how we collect, use, and protect your information when you use our App. By signing in, you agree to this policy.
           </p>
 
           <Section title="1. Information We Collect">
@@ -104,9 +105,9 @@ export default function PrivacyPolicy({ onBack }) {
           <Section title="9. Contact">
             <p>For privacy questions, data requests, or account deletion:</p>
             <p style={{ marginTop: 8 }}>
-              <strong style={{ color: C.text }}>Email:</strong> <a href="mailto:privacy@superrecall.in" style={{ color: C.accent }}>privacy@superrecall.in</a><br />
-              <strong style={{ color: C.text }}>Company:</strong> SuperRecall<br />
-              <strong style={{ color: C.text }}>App:</strong> CAIIB Prep (com.superrecall.caiib)
+              <strong style={{ color: C.text }}>Email:</strong> <a href={`mailto:${SERIES.email.privacy}`} style={{ color: C.accent }}>{SERIES.email.privacy}</a><br />
+              <strong style={{ color: C.text }}>Company:</strong> {SERIES.company}<br />
+              <strong style={{ color: C.text }}>App:</strong> {APP.name} ({APP.packageId})
             </p>
           </Section>
         </div>

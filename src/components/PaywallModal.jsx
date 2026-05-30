@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Zap, Brain, BookOpen, Sparkles, CheckCircle2, Crown } from "lucide-react";
 import { C } from "../theme";
+import { APP, SERIES } from "../brand";
 import { PLANS, purchaseSubscription } from "../utils/subscription";
 
 export default function PaywallModal({ onClose, trigger = "generic" }) {
@@ -116,7 +117,7 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
 
         <p style={{ color: C.dim, fontSize: 10, textAlign: "center", margin: 0, lineHeight: 1.6 }}>
           Billed via Google Play · Cancel anytime in Play Store → Subscriptions<br />
-          Exam prep only — not affiliated with IIBF
+          {SERIES.name} · {APP.name} · Not affiliated with IIBF
         </p>
       </div>
     </div>
