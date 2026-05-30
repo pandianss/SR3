@@ -16,9 +16,14 @@
  *
  * @returns {Promise<'active'|'missing'|'error'|'offline'>}
  */
+// __API_BASE__ is injected by Vite at build time:
+//   '' in dev  (relative /api, handled by Vite proxy)
+//   'https://api.superrecall.in' in production APK builds
+const API_BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '';
+
 export async function checkServerApiStatus() {
   try {
-    const res = await fetch('/api/gemini/status', {
+    const res = await fetch(`${API_BASE}/api/gemini/status`, {
       signal: AbortSignal.timeout(8_000)
     });
     if (!res.ok) return 'error';

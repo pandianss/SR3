@@ -273,9 +273,13 @@ export function calculatePassProbability(userProfile, studyHoursAdjustment = 0) 
 //    No API key is ever sent from the browser.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// In production APK builds, __API_BASE__ is the deployed backend URL.
+// In dev, it is '' and the Vite proxy handles /api/* → localhost:3001.
+const API_BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '';
+
 export async function generateAICaseStudy(topicName) {
   try {
-    const res = await fetch('/api/gemini/case-study', {
+    const res = await fetch(`${API_BASE}/api/gemini/case-study`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ topicName }),
@@ -292,7 +296,7 @@ export async function generateAICaseStudy(topicName) {
 export async function explainMistake(question, optionSelected, correctOption, whyDetail) {
   try {
     // Centralized Gemini requests are now proxied securely through our backend server.
-    const res = await fetch('/api/gemini/explain', {
+    const res = await fetch(`${API_BASE}/api/gemini/explain`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ question, optionSelected, correctOption, whyDetail }),
@@ -322,7 +326,7 @@ export async function generateStudySchedule(projectedScores, elective) {
   };
 
   try {
-    const res = await fetch('/api/gemini/schedule', {
+    const res = await fetch(`${API_BASE}/api/gemini/schedule`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ projectedScores, elective }),

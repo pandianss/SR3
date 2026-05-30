@@ -34,3 +34,7 @@ src/data/newIngestedCirculars.json
 
 # Server runtime cache — regenerated on every start
 server/cache/*.json
+
+# Capacitor — Android project is generated via `npx cap add android`
+# Commit capacitor.config.ts and package.json; rebuild with: npx cap add android && npx cap sync android
+android/

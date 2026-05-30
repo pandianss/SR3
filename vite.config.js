@@ -3,20 +3,29 @@ import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load ALL .env vars into `env` (including non-VITE_-prefixed ones like
-  // INTERNAL_TOKEN) so the proxy can inject them as request headers without
-  // ever exposing them to browser JavaScript.
   const env = loadEnv(mode, process.cwd(), '')
+  const isProd = mode === 'production'
 
   return {
     plugins: [react()],
+
+    // In production (Capacitor APK), the WebView has no proxy — API calls go
+    // directly to the deployed backend via VITE_API_BASE_URL.
+    // In development, Vite proxies /api → localhost:3001 as before.
+    define: {
+      // Exposes the API base to the app so fetch calls can be absolute in prod.
+      __API_BASE__: JSON.stringify(
+        isProd
+          ? (env.VITE_API_BASE_URL || '')   // e.g. https://api.superrecall.in
+          : ''                               // empty = relative /api (proxy handles it)
+      ),
+    },
+
     server: {
       proxy: {
         '/api': {
           target: 'http://localhost:3001',
           changeOrigin: true,
-          // Inject the shared secret so the backend can verify the caller.
-          // The browser never sees this header — it is added by the proxy layer.
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
               if (env.INTERNAL_TOKEN) {
