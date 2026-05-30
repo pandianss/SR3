@@ -6,7 +6,7 @@ import { geminiLimiter } from '../middleware/rateLimit.js';
 const router = Router();
 
 const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LRU Cache with per-entry TTL — pure Map-based, zero extra dependencies.

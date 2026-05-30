@@ -28,7 +28,7 @@ const TOPIC_KEYWORD_MAP = [
   { keyword: "monetary policy", topicId: "T-Central-C1", subjectId: "Central" }
 ];
 
-const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 async function scrapeRBIPage() {
   console.log(`[Scraper] Fetching RBI Notifications RSS Feed: ${RBI_RSS_URL}`);
