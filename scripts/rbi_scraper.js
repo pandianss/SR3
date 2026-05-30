@@ -1,3 +1,4 @@
+import "dotenv/config";
 // RBI Notifications RSS Scraper & Ingestion Script
 // Node.js only — run via: node scripts/rbi_scraper.js
 // Utilizes Axios for requests, Cheerio for XML parsing, and Gemini API for LLM classification.
