@@ -3,6 +3,7 @@
 // baked into the client bundle at build time (safe for Firebase public config).
 
 import { initializeApp } from "firebase/app";
+import { getAnalytics, logEvent } from "firebase/analytics";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -28,15 +29,22 @@ const firebaseConfig = {
   storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Guard: if any required key is missing, Firebase will fail loudly in console
 // but the app falls back to localStorage-only mode gracefully.
 const isConfigured = Object.values(firebaseConfig).every(Boolean);
 
-const app  = isConfigured ? initializeApp(firebaseConfig) : null;
-const auth = app ? getAuth(app) : null;
-const db   = app ? getFirestore(app) : null;
+const app      = isConfigured ? initializeApp(firebaseConfig) : null;
+const auth     = app ? getAuth(app) : null;
+const db       = app ? getFirestore(app) : null;
+const analytics = app ? getAnalytics(app) : null;
+
+// Thin wrapper — safe to call even when analytics is null
+export function track(eventName, params = {}) {
+  if (analytics) logEvent(analytics, eventName, params);
+}
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
