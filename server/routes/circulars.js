@@ -13,7 +13,7 @@ const __dirname  = dirname(__filename);
 
 const CACHE_FILE         = join(__dirname, '../cache/circulars.json');
 const RBI_URL            = 'https://rbi.org.in/Scripts/Notifications.aspx';
-const GEMINI_ENDPOINT    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GEMINI_ENDPOINT    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 const REFRESH_INTERVAL   = 6 * 60 * 60 * 1000; // 6 hours in ms
 
 // Local keyword → topic map used when Gemini is unavailable
