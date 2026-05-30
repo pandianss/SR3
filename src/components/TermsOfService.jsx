@@ -56,7 +56,7 @@ export default function TermsOfService({ onBack }) {
           <Section title="3. Subscriptions & Payments">
             <p style={{ marginBottom: 8 }}>Premium features are available via a subscription processed through Google Play Billing.</p>
             <ul style={{ paddingLeft: 20 }}>
-              <Li><strong style={{ color: C.text }}>Billing:</strong> Subscriptions are billed monthly or annually as selected. Your Google Play account is charged at the start of each period.</Li>
+              <Li><strong style={{ color: C.text }}>Billing:</strong> Subscriptions are available on Monthly (₹149), 3-Month Exam Ready (₹349), and Yearly (₹999) plans, billed via Google Play at the start of each period.</Li>
               <Li><strong style={{ color: C.text }}>Auto-renewal:</strong> Subscriptions auto-renew unless cancelled at least 24 hours before the end of the current period.</Li>
               <Li><strong style={{ color: C.text }}>Cancellation:</strong> Cancel anytime in Google Play → Subscriptions. Access continues until the end of the paid period.</Li>
               <Li><strong style={{ color: C.text }}>Refunds:</strong> Refund requests are handled by Google Play in accordance with their refund policy. We do not issue refunds directly. For issues, contact <a href="mailto:support@superrecall.in" style={{ color: C.accent }}>support@superrecall.in</a>.</Li>

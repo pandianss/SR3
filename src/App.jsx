@@ -524,8 +524,8 @@ export default function App() {
                         </div>
                       </div>
                       <button onClick={() => setPaywallTrigger("generic")}
-                        style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                        👑 Upgrade
+                        style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap" }}>
+                        👑 ₹349
                       </button>
                     </div>
                   )}

@@ -9,22 +9,51 @@
 import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
+// ── Pricing strategy ─────────────────────────────────────────────────────────
+// CAIIB candidates think in exam cycles (3–4 months before May/Nov attempt).
+// The 3-month "Exam Ready" plan is the conversion hero — priced to close.
+// Monthly exists for impulse buyers; Yearly for repeat takers / serious students.
+//
+// After Google Play's 15% cut:
+//   Monthly  ₹149  → ₹126.65/month net
+//   3-Month  ₹349  → ₹296.65 net  (₹98.88/month net)
+//   Yearly   ₹999  → ₹849.15 net  (₹70.76/month net)
+//
+// Referral commission (15%): Monthly ₹22 · 3-Month ₹52 · Yearly ₹150
+
 export const PLANS = {
   monthly: {
-    id: "monthly",
+    id:        "monthly",
     productId: "caiib_premium_monthly",   // must match Play Console product ID exactly
-    label: "Monthly",
-    price: "₹149",
-    period: "/ month",
-    savings: null,
+    label:     "Monthly",
+    price:     "₹149",
+    priceNum:  149,
+    period:    "/ month",
+    months:    1,
+    badge:     null,
+    highlight: false,
+  },
+  exam: {
+    id:        "exam",
+    productId: "caiib_premium_3month",
+    label:     "Exam Ready",
+    price:     "₹349",
+    priceNum:  349,
+    period:    "/ 3 months",
+    months:    3,
+    badge:     "Most Popular",
+    highlight: true,          // shown as hero option in paywall
   },
   yearly: {
-    id: "yearly",
+    id:        "yearly",
     productId: "caiib_premium_yearly",
-    label: "Yearly",
-    price: "₹999",
-    period: "/ year",
-    savings: "Save 44%",
+    label:     "Yearly",
+    price:     "₹999",
+    priceNum:  999,
+    period:    "/ year",
+    months:    12,
+    badge:     "Best Value",
+    highlight: false,
   },
 };
 
