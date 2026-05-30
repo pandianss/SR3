@@ -2,11 +2,17 @@ import { useState } from "react";
 import { signInWithGoogle, isConfigured } from "../utils/firebase";
 import { Shield, AlertTriangle, Tag } from "lucide-react";
 import { C, font } from "../theme";
+import PrivacyPolicy from "./PrivacyPolicy";
+import TermsOfService from "./TermsOfService";
 
 export default function AuthScreen({ onSignedIn }) {
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState("");
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState("");
   const [referralInput, setReferralInput] = useState("");
+  const [legalPage, setLegalPage]         = useState(null); // 'privacy' | 'terms'
+
+  if (legalPage === "privacy") return <PrivacyPolicy onBack={() => setLegalPage(null)} />;
+  if (legalPage === "terms")   return <TermsOfService onBack={() => setLegalPage(null)} />;
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -120,8 +126,11 @@ export default function AuthScreen({ onSignedIn }) {
           <p style={{ color: C.err, fontSize: 12, textAlign: "center", margin: 0 }}>{error}</p>
         )}
 
-        <p style={{ color: C.dim, fontSize: 10, textAlign: "center", margin: 0, lineHeight: 1.5 }}>
-          By signing in you agree to our Privacy Policy and Terms of Service.
+        <p style={{ color: C.dim, fontSize: 10, textAlign: "center", margin: 0, lineHeight: 1.7 }}>
+          By signing in you agree to our{" "}
+          <button onClick={() => setLegalPage("privacy")} style={{ background: "none", border: "none", color: C.accent, fontSize: 10, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Privacy Policy</button>
+          {" "}and{" "}
+          <button onClick={() => setLegalPage("terms")} style={{ background: "none", border: "none", color: C.accent, fontSize: 10, cursor: "pointer", padding: 0, textDecoration: "underline" }}>Terms of Service</button>.
           We only store your exam study data — never sold to third parties.
         </p>
 

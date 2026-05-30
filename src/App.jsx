@@ -20,6 +20,8 @@ import { generateReferralCode, registerReferralCode, linkReferral, getReferralSt
 // Component imports
 import Onboarding from "./components/Onboarding";
 import AuthScreen from "./components/AuthScreen";
+import PrivacyPolicy from "./components/PrivacyPolicy";
+import TermsOfService from "./components/TermsOfService";
 import StudyPanel from "./components/StudyPanel";
 import RevisionInbox from "./components/RevisionInbox";
 import PassOptimizer from "./components/PassOptimizer";
@@ -235,7 +237,7 @@ export default function App() {
       <div style={{ width: "100%", maxWidth: 480, minHeight: "100vh", display: "flex", flexDirection: "column", background: C.surf, position: "relative" }}>
 
         {/* ── Top App Bar ── */}
-        {isOnboarded && tab !== "study_session" && tab !== "session_complete" && (
+        {isOnboarded && !["study_session", "session_complete", "privacy", "terms"].includes(tab) && (
           <div style={{
             background: C.surf, borderBottom: `1px solid ${C.border}`,
             display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -419,6 +421,16 @@ export default function App() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
                 <span style={{ color: C.muted, fontSize: 12 }}>Local DB size</span>
                 <span style={{ color: C.text, fontWeight: 600, fontSize: 12 }}>{dbSize}</span>
+              </div>
+
+              {/* Legal */}
+              <div style={{ display: "flex", gap: 8 }}>
+                {[["Privacy Policy", "privacy"], ["Terms of Service", "terms"]].map(([label, page]) => (
+                  <button key={page} onClick={() => { setShowSettings(false); setTab(page); }}
+                    style={{ flex: 1, background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, padding: "9px 10px", cursor: "pointer", color: C.muted, fontSize: 11, fontWeight: 600 }}>
+                    {label}
+                  </button>
+                ))}
               </div>
 
               {/* Reset */}
@@ -736,6 +748,10 @@ export default function App() {
                   }} />
               )}
 
+              {/* LEGAL SCREENS */}
+              {tab === "privacy" && <PrivacyPolicy onBack={() => setTab("home")} />}
+              {tab === "terms"   && <TermsOfService onBack={() => setTab("home")} />}
+
               {/* SESSION COMPLETE SCREEN */}
               {tab === "session_complete" && (
                 <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "32px 24px", textAlign: "center", gap: 20 }}>
@@ -783,7 +799,7 @@ export default function App() {
         </div>
 
         {/* ── Bottom Tab Bar ── */}
-        {isOnboarded && tab !== "study_session" && tab !== "session_complete" && (
+        {isOnboarded && !["study_session", "session_complete", "privacy", "terms"].includes(tab) && (
           <div style={{
             background: C.surf, borderTop: `1.5px solid ${C.border}`,
             display: "flex", padding: `8px 0 calc(12px + env(safe-area-inset-bottom, 0px))`,
