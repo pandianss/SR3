@@ -16,6 +16,9 @@ import { checkServerApiStatus } from "./utils/keyStore";
 import { subscribeToAuthState, signOutUser, isConfigured } from "./utils/firebase";
 import { syncRead, syncWrite } from "./utils/syncStore";
 import { generateReferralCode, registerReferralCode, linkReferral, getReferralStats } from "./utils/referral";
+import { loadSubscriptionStatus, canUseMode, canStudySubject, FREE_SUBJECTS, FREE_DAILY_CARD_LIMIT } from "./utils/subscription";
+import { requestPushPermission, scheduleDailyReminder } from "./utils/notifications";
+import PaywallModal from "./components/PaywallModal";
 
 // Component imports
 import Onboarding from "./components/Onboarding";
@@ -68,6 +71,16 @@ export default function App() {
   // Referral
   const [referralStats, setReferralStats] = useState(null);
 
+  // Subscription
+  const [isPremium, setIsPremium] = useState(false);
+  const [paywallTrigger, setPaywallTrigger] = useState(null); // null = closed
+  const [dailyCardCount, setDailyCardCount] = useState(() => {
+    const saved = localStorage.getItem("caiib_daily_cards");
+    if (!saved) return 0;
+    const { date, count } = JSON.parse(saved);
+    return date === new Date().toDateString() ? count : 0;
+  });
+
   // ── Bootstrap: auth listener + cloud sync ──────────────────────────────────
   useEffect(() => {
     seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
@@ -88,6 +101,9 @@ export default function App() {
         if (profile.referralCode) {
           getReferralStats(uid, profile.referralCode).then(setReferralStats);
         }
+
+        // Load subscription status
+        loadSubscriptionStatus(uid).then(s => setIsPremium(s.isPremium));
       } else {
         const onboarded = localStorage.getItem("caiib_onboarded") === "true";
         if (onboarded) {
@@ -141,6 +157,11 @@ export default function App() {
     if (referralCode && uid) {
       getReferralStats(uid, referralCode).then(setReferralStats);
     }
+
+    // Request push permission after onboarding (non-blocking)
+    requestPushPermission(uid).then(granted => {
+      if (granted) scheduleDailyReminder(0);
+    });
 
     setTab("home");
   };
@@ -483,6 +504,27 @@ export default function App() {
                     </p>
                   </div>
 
+                  {/* Free tier usage bar */}
+                  {!isPremium && (
+                    <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Daily cards used</span>
+                          <span style={{ color: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.text, fontSize: 11, fontWeight: 700 }}>
+                            {dailyCardCount} / {FREE_DAILY_CARD_LIMIT}
+                          </span>
+                        </div>
+                        <div style={{ height: 4, background: C.border, borderRadius: 99 }}>
+                          <div style={{ height: 4, borderRadius: 99, background: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.accent, width: `${Math.min(100, (dailyCardCount / FREE_DAILY_CARD_LIMIT) * 100)}%`, transition: "width 0.3s" }} />
+                        </div>
+                      </div>
+                      <button onClick={() => setPaywallTrigger("generic")}
+                        style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                        👑 Upgrade
+                      </button>
+                    </div>
+                  )}
+
                   {/* Resume Banner — shown when a mid-session checkpoint exists */}
                   {checkpoint && (
                     <div style={{
@@ -527,18 +569,23 @@ export default function App() {
                     Study Subject
                   </p>
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10, flexShrink: 0, marginBottom: 16 }}>
-                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => (
-                      <button key={s.id} onClick={() => setActiveSubject(s.id)}
-                        style={{
-                          background: activeSubject === s.id ? s.color : C.card,
-                          border: `1.5px solid ${activeSubject === s.id ? s.color : C.border}`,
-                          borderRadius: 8, padding: "6px 14px",
-                          color: activeSubject === s.id ? "#000" : C.muted,
-                          fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0
-                        }}>
-                        {s.label}
-                      </button>
-                    ))}
+                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => {
+                      const locked = !canStudySubject(s.id, isPremium);
+                      const active = activeSubject === s.id;
+                      return (
+                        <button key={s.id} onClick={() => locked ? setPaywallTrigger("subject") : setActiveSubject(s.id)}
+                          style={{
+                            background: active ? s.color : C.card,
+                            border: `1.5px solid ${active ? s.color : C.border}`,
+                            borderRadius: 8, padding: "6px 14px",
+                            color: active ? "#000" : locked ? C.dim : C.muted,
+                            fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                            opacity: locked ? 0.6 : 1
+                          }}>
+                          {s.label} {locked ? "🔒" : ""}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Study Modes Panel */}
@@ -552,8 +599,9 @@ export default function App() {
                       { id: "rapid", Icon: Zap, label: "Rapid Revision Mode", sub: "Formula drills · Weak memory queue", color: C.accent, bg: "#1E1505", mins: "10–15 min" }
                     ].map(m => {
                       const active = energyMode === m.id;
+                      const locked = !canUseMode(m.id, isPremium);
                       return (
-                        <button key={m.id} onClick={() => setEnergyMode(m.id)}
+                        <button key={m.id} onClick={() => locked ? setPaywallTrigger(`mode_${m.id === "focus" ? "deep" : "rapid"}`) : setEnergyMode(m.id)}
                           style={{
                             background: active ? m.bg : C.card,
                             border: `1.5px solid ${active ? m.color : C.border}`,
@@ -561,18 +609,21 @@ export default function App() {
                             display: "flex", alignItems: "center", gap: 12, textAlign: "left", transition: "all 0.2s"
                           }}>
                           <div style={{ width: 36, height: 36, borderRadius: 10, background: `${m.color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <m.Icon size={18} color={m.color} />
+                            <m.Icon size={18} color={locked ? C.dim : m.color} />
                           </div>
                           <div style={{ flex: 1, overflow: "hidden" }}>
-                            <p style={{ color: C.text, fontWeight: 600, fontSize: 13, margin: 0 }}>{m.label}</p>
-                            <p style={{ color: C.muted, fontSize: 11, margin: "2px 0 0", textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{m.sub}</p>
+                            <p style={{ color: locked ? C.dim : C.text, fontWeight: 600, fontSize: 13, margin: 0 }}>{m.label} {locked && <span style={{ fontSize: 10 }}>🔒</span>}</p>
+                            <p style={{ color: C.muted, fontSize: 11, margin: "2px 0 0", textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{locked ? "Premium only" : m.sub}</p>
                           </div>
                           <div style={{ textAlign: "right" }}>
-                            <span style={{ color: m.color, fontSize: 11, fontWeight: 600 }}>{m.mins}</span>
+                            <span style={{ color: locked ? C.dim : m.color, fontSize: 11, fontWeight: 600 }}>{locked ? "Upgrade" : m.mins}</span>
                             {active && (
                               <div style={{ marginTop: 4 }}>
                                 <button onClick={(e) => {
                                   e.stopPropagation();
+                                  if (!isPremium && dailyCardCount >= FREE_DAILY_CARD_LIMIT) {
+                                    setPaywallTrigger("card_limit"); return;
+                                  }
                                   const list = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
                                   handleStartStudySession(list.length > 0 ? list : MICRO_LESSONS, m.id);
                                 }}
@@ -791,7 +842,14 @@ export default function App() {
               {tab === "study_session" && (
                 <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab}
                   initialIndex={resumeIndex}
-                  onCardAdvance={(idx) => saveSessionCheckpoint({ subjectId: activeSubject, energyMode, queueIds: sessionQueue.map(l => l.id), currentIndex: idx })}
+                  onCardAdvance={(idx) => {
+                    saveSessionCheckpoint({ subjectId: activeSubject, energyMode, queueIds: sessionQueue.map(l => l.id), currentIndex: idx });
+                    if (!isPremium) {
+                      const newCount = dailyCardCount + 1;
+                      setDailyCardCount(newCount);
+                      localStorage.setItem("caiib_daily_cards", JSON.stringify({ date: new Date().toDateString(), count: newCount }));
+                    }
+                  }}
                   onSessionComplete={() => { clearSessionCheckpoint(); setCheckpoint(null); setResumeIndex(0); setTab("session_complete"); }} />
               )}
             </>
@@ -831,6 +889,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Paywall modal */}
+      {paywallTrigger && (
+        <PaywallModal trigger={paywallTrigger} onClose={() => setPaywallTrigger(null)} />
+      )}
     </div>
   );
 }
