@@ -1,20 +1,14 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
-const isDev = process.env.NODE_ENV !== 'production';
+// Production config — always loads from bundled dist/.
+// For live-reload during development, temporarily override server.url manually
+// (do NOT commit that change):
+//   server: { url: 'http://10.0.2.2:5173', cleartext: true }
 
 const config: CapacitorConfig = {
   appId: 'com.superrecall.caiib',
   appName: 'SuperRecall - CAIIB',
   webDir: 'dist',
-
-  // In development, point the WebView at the Vite dev server so hot-reload works.
-  // In production builds this block is omitted and the bundled dist/ is used.
-  ...(isDev && {
-    server: {
-      url: 'http://10.0.2.2:5173', // Android emulator loopback to host machine
-      cleartext: true,             // allow HTTP in dev only
-    }
-  }),
 
   plugins: {
     SplashScreen: {
@@ -29,9 +23,8 @@ const config: CapacitorConfig = {
   },
 
   android: {
-    // Target Android 13+ (API 33) — required by current Play Store policy
     minWebViewVersion: 80,
-    allowMixedContent: false,       // HTTPS only in production
+    allowMixedContent: false,
     backgroundColor: '#0B1929',
   },
 };

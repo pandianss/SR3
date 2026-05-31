@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
 
+    // Capacitor serves the app via file:// — relative base is required so asset
+    // paths don't break (default '/' would resolve to the filesystem root).
+    base: './',
+
     // In production (Capacitor APK), the WebView has no proxy — API calls go
     // directly to the deployed backend via VITE_API_BASE_URL.
     // In development, Vite proxies /api → localhost:3001 as before.
