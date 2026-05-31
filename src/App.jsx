@@ -574,7 +574,7 @@ export default function App() {
                     Study Subject
                   </p>
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10, flexShrink: 0, marginBottom: 16 }}>
-                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => {
+                    {SUBJECTS.concat(ELECTIVES).map(s => {
                       const locked = !canStudySubject(s.id, isPremium);
                       const active = activeSubject === s.id;
                       return (
@@ -696,7 +696,7 @@ export default function App() {
 
                   {/* Subject Pickers */}
                   <div style={{ display: "flex", gap: 5, overflowX: "auto", paddingBottom: 10, flexShrink: 0 }}>
-                    {SUBJECTS.concat(userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []).map(s => (
+                    {SUBJECTS.concat(ELECTIVES).map(s => (
                       <button key={s.id} onClick={() => { setActiveSubject(s.id); setExpandedModule(`${s.id}-A`); }}
                         style={{
                           background: activeSubject === s.id ? s.color : C.card,

@@ -50,9 +50,7 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
     setShowExplain(false);
   }
 
-  const allSubjects = SUBJECTS.concat(
-    userProfile?.elective ? ELECTIVES.filter(e => e.id === userProfile.elective) : []
-  );
+  const allSubjects = SUBJECTS.concat(ELECTIVES);
 
   if (done) {
     const pct = Math.round((score / total) * 100);
