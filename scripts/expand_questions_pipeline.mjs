@@ -165,6 +165,29 @@ for (const subjectId of subjects) {
   } else {
     console.log(`Subject ${subjectId} Batch 3 is already cached.`);
   }
+
+  // Batch 4: target remaining thin topics (< 8 questions in current bank)
+  const hasBatch4 = cache.some(q => q.subjectId === subjectId && q.sourceBatch === 4);
+  if (!hasBatch4) {
+    const currentCounts = {};
+    QB_base.forEach(q => {
+      if (q.subjectId === subjectId) currentCounts[q.topicId] = (currentCounts[q.topicId] || 0) + 1;
+    });
+    const thinTopics = subjectTopics.filter(t => (currentCounts[t.id] || 0) < 8);
+    if (thinTopics.length > 0) {
+      console.log(`Generating Batch 4 for ${subjectId} (${thinTopics.length} thin topics <8q)...`);
+      const q4 = await generateBatch(subjectId, 4, thinTopics, cache.length);
+      if (q4) {
+        q4.forEach(q => { q.sourceBatch = 4; cache.push(q); });
+        fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
+        await sleep(3000);
+      }
+    } else {
+      console.log(`Subject ${subjectId} Batch 4 skipped — all topics already have ≥8 questions.`);
+    }
+  } else {
+    console.log(`Subject ${subjectId} Batch 4 is already cached.`);
+  }
 }
 
 console.log(`\nTotal AI-generated questions ready in cache: ${cache.length}`);
