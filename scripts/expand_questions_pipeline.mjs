@@ -2,7 +2,7 @@ import fs from 'fs';
 import axios from 'axios';
 import dotenv from 'dotenv';
 import { QUESTION_BANK as QB_base } from '../src/data/questionBank.js';
-import { MICRO_LESSONS, TOPICS } from '../src/data/contentGraph.js';
+import { MICRO_LESSONS, TOPICS, SUBJECTS } from '../src/data/contentGraph.js';
 
 dotenv.config();
 
@@ -28,7 +28,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper: Query Gemini with retry logic
 async function generateBatch(subjectId, batchNum, topics, existingCount) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
   const topicIds = topics.map(t => t.id);
   const topicNames = topics.map(t => t.name);
 
@@ -64,7 +64,13 @@ Requirements:
     try {
       console.log(`Sending API request for ${subjectId} Batch ${batchNum} (focusing on ${topics.length} topics)...`);
       const response = await axios.post(url, payload, { headers: { 'Content-Type': 'application/json' } });
-      const text = response.data.candidates[0].content.parts[0].text;
+      const rawText = response.data.candidates[0].content.parts[0].text;
+      // Sanitize: strip all control chars except \n \r \t, then fix bare newlines inside JSON strings
+      const sanitized = rawText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      // Replace literal newlines/carriage returns inside JSON string values with \n escape
+      const text = sanitized.replace(/"(?:[^"\\]|\\.)*"/gs, m =>
+        m.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+      );
       const questions = JSON.parse(text);
       if (Array.isArray(questions) && questions.length > 0) {
         console.log(`Successfully generated ${questions.length} questions for ${subjectId} Batch ${batchNum}.`);
@@ -83,7 +89,8 @@ Requirements:
       }
     }
   }
-  throw new Error(`Failed to generate questions for ${subjectId} Batch ${batchNum} after 3 attempts.`);
+  console.error(`Skipping ${subjectId} Batch ${batchNum} — all retries exhausted.`);
+  return null;
 }
 
 console.log('=== STEP 1: GENERATE AI QUESTIONS ===\n');
@@ -112,9 +119,11 @@ for (const subjectId of subjects) {
   if (!hasBatch1) {
     console.log(`Generating Batch 1 for ${subjectId}...`);
     const q1 = await generateBatch(subjectId, 1, topics1, cache.length);
-    q1.forEach(q => { q.sourceBatch = 1; cache.push(q); });
-    fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
-    await sleep(3000); // rate limiting sleep
+    if (q1) {
+      q1.forEach(q => { q.sourceBatch = 1; cache.push(q); });
+      fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
+      await sleep(3000); // rate limiting sleep
+    }
   } else {
     console.log(`Subject ${subjectId} Batch 1 is already cached.`);
   }
@@ -124,11 +133,37 @@ for (const subjectId of subjects) {
   if (!hasBatch2) {
     console.log(`Generating Batch 2 for ${subjectId}...`);
     const q2 = await generateBatch(subjectId, 2, topics2, cache.length);
-    q2.forEach(q => { q.sourceBatch = 2; cache.push(q); });
-    fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
-    await sleep(3000); // rate limiting sleep
+    if (q2) {
+      q2.forEach(q => { q.sourceBatch = 2; cache.push(q); });
+      fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
+      await sleep(3000); // rate limiting sleep
+    }
   } else {
     console.log(`Subject ${subjectId} Batch 2 is already cached.`);
+  }
+
+  // Batch 3: target thin topics (< 5 questions in current bank)
+  const hasBatch3 = cache.some(q => q.subjectId === subjectId && q.sourceBatch === 3);
+  if (!hasBatch3) {
+    // QB_base is already the merged bank (includes cache), so count only QB_base
+    const currentCounts = {};
+    QB_base.forEach(q => {
+      if (q.subjectId === subjectId) currentCounts[q.topicId] = (currentCounts[q.topicId] || 0) + 1;
+    });
+    const thinTopics = subjectTopics.filter(t => (currentCounts[t.id] || 0) < 5);
+    if (thinTopics.length > 0) {
+      console.log(`Generating Batch 3 for ${subjectId} (${thinTopics.length} thin topics)...`);
+      const q3 = await generateBatch(subjectId, 3, thinTopics, cache.length);
+      if (q3) {
+        q3.forEach(q => { q.sourceBatch = 3; cache.push(q); });
+        fs.writeFileSync(cacheFilePath, JSON.stringify(cache, null, 2), 'utf8');
+        await sleep(3000);
+      }
+    } else {
+      console.log(`Subject ${subjectId} Batch 3 skipped — all topics already have ≥5 questions.`);
+    }
+  } else {
+    console.log(`Subject ${subjectId} Batch 3 is already cached.`);
   }
 }
 
@@ -192,17 +227,15 @@ function addQuestionsToFinal(pool, sourceLabel) {
   });
 }
 
-// 1. Add existing corrected base questions (89 questions)
-console.log('Adding 89 base questions...');
-addQuestionsToFinal(QB_base, 'Base');
-
-// 2. Add extracted lesson quizzes (308 questions)
-console.log('Adding 308 extracted lesson questions...');
+// 1. Add extracted lesson quizzes (canonical source — comes from contentGraph)
+console.log(`Adding ${extractedLessonQuizzes.length} extracted lesson questions...`);
 addQuestionsToFinal(extractedLessonQuizzes, 'Lesson');
 
-// 3. Add AI generated questions (612 questions)
-console.log('Adding 612 AI-generated questions...');
+// 2. Add AI generated questions (cache is the other canonical source)
+console.log(`Adding ${cache.length} AI-generated questions...`);
 addQuestionsToFinal(cache, 'AI');
+// NOTE: QB_base (questionBank.js) is intentionally NOT re-added here — it is the
+// OUTPUT of this pipeline, not a source. Adding it would compound duplicates on each run.
 
 console.log(`Total questions in final pool: ${finalQuestions.length}`);
 
