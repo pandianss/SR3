@@ -248,3 +248,41 @@ export function seedMockSpacedRepetitionData(allLessons = [], allFormulas = []) 
   
   saveAllCardStates(states);
 }
+
+// ─── XP & Streak ─────────────────────────────────────────────────────────────
+
+export function getCareerRank(xp = 0) {
+  if (xp >= 50000) return { level: 5, title: "Champion" };
+  if (xp >= 25000) return { level: 4, title: "Strategist" };
+  if (xp >= 10000) return { level: 3, title: "Tactician" };
+  if (xp >= 3000)  return { level: 2, title: "Explorer" };
+  return { level: 1, title: "Novice" };
+}
+
+/**
+ * Return an updated profile with streak + XP applied.
+ * Does NOT persist — caller must syncWrite the result.
+ *
+ * Streak rules (UTC dates):
+ *   same day    → no change
+ *   yesterday   → streak + 1
+ *   older/never → reset to 1
+ */
+export function computeStreakAndXP(profile, { cardXP = 0, sessionBonus = false } = {}) {
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    .toISOString().slice(0, 10);
+  const lastActive = profile.lastActiveDateUTC || "";
+
+  let streak = profile.streak || 0;
+  if (lastActive !== todayUTC) {
+    const yesterdayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1))
+      .toISOString().slice(0, 10);
+    streak = lastActive === yesterdayUTC ? streak + 1 : 1;
+  }
+
+  const xp = (profile.xp || 0) + cardXP + (sessionBonus ? 50 : 0);
+  const { level, title: careerTitle } = getCareerRank(xp);
+
+  return { ...profile, streak, xp, level, careerTitle, lastActiveDateUTC: todayUTC };
+}

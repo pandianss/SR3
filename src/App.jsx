@@ -1,21 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   BookOpen, Brain, Zap, Clock, TrendingUp, Home,
   BarChart2, FlaskConical, Play, AlertTriangle,
   RotateCcw, Target, Battery, ChevronRight, Star,
   BookMarked, Shield, FileText, RefreshCw, WifiOff,
   Settings, X, KeyRound, CheckCircle2, ServerCrash,
-  LogOut, User, PenLine
+  LogOut, User, PenLine, Users, Bell
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
-import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint } from "./utils/spacedRepetition";
+import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint, computeStreakAndXP } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
 import { subscribeToAuthState, signOutUser, isConfigured } from "./utils/firebase";
 import { APP, SERIES } from "./brand";
-import { syncRead, syncWrite } from "./utils/syncStore";
+import { syncRead, syncWrite, ensureProfileDefaults } from "./utils/syncStore";
+import { checkAndClearNudges, getStudyPartners, pairWithPartner, sendNudge, getWeeklyLeaderboard } from "./utils/partner";
 import { generateReferralCode, registerReferralCode, linkReferral, getReferralStats } from "./utils/referral";
 import { loadSubscriptionStatus, canUseMode, canStudySubject, FREE_SUBJECTS, FREE_DAILY_CARD_LIMIT } from "./utils/subscription";
 import { requestPushPermission, scheduleDailyReminder } from "./utils/notifications";
@@ -57,9 +58,16 @@ export default function App() {
   // AI backend status — 'checking' | 'active' | 'missing' | 'error' | 'offline'
   const [apiStatus, setApiStatus] = useState("checking");
 
+  // XP / streak — refs declared first so the effect below can safely close over them
+  const userProfileRef = useRef(null);
+  const sessionXPRef = useRef(0);
+
   useEffect(() => {
     checkServerApiStatus().then(setApiStatus);
   }, []);
+
+  // Keep ref current so XP callbacks never close over stale profile.
+  useEffect(() => { userProfileRef.current = userProfile; }, [userProfile]);
 
   // Active Subject selection
   const [activeSubject, setActiveSubject] = useState("BFM");
@@ -72,6 +80,17 @@ export default function App() {
 
   // Referral
   const [referralStats, setReferralStats] = useState(null);
+  const [lastSessionXP, setLastSessionXP] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [partners, setPartners] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [nudgeBanner, setNudgeBanner] = useState(null);
+  const [showBuddies, setShowBuddies] = useState(false);
+  const [pairCode, setPairCode] = useState("");
+  const [pairError, setPairError] = useState("");
+  const [pairLoading, setPairLoading] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState({});
 
   // Subscription
   const [isPremium, setIsPremium] = useState(false);
@@ -94,8 +113,11 @@ export default function App() {
       const uid = user?.uid ?? null;
 
       // Load profile — prefer Firestore, fall back to localStorage
-      const profile = await syncRead(uid, "profile", "caiib_user_profile");
-      if (profile) {
+      const rawProfile = await syncRead(uid, "profile", "caiib_user_profile");
+      if (rawProfile) {
+        const profile = ensureProfileDefaults(rawProfile);
+        // Backfill defaults to Firestore on the next write via merge: true
+        if (uid) syncWrite(uid, "profile", "caiib_user_profile", profile);
         setUserProfile(profile);
         setIsOnboarded(true);
 
@@ -106,12 +128,20 @@ export default function App() {
 
         // Load subscription status
         loadSubscriptionStatus(uid).then(s => setIsPremium(s.isPremium));
+
+        // Social: load partners and check for unread nudges
+        getStudyPartners(profile).then(setPartners);
+        checkAndClearNudges(uid).then(nudges => {
+          if (nudges.length > 0) {
+            setNudgeBanner(`You have ${nudges.length} study nudge${nudges.length > 1 ? "s" : ""} from your study buddies!`);
+          }
+        });
       } else {
         const onboarded = localStorage.getItem("caiib_onboarded") === "true";
         if (onboarded) {
           setIsOnboarded(true);
           const local = localStorage.getItem("caiib_user_profile");
-          if (local) setUserProfile(JSON.parse(local));
+          if (local) setUserProfile(ensureProfileDefaults(JSON.parse(local)));
         }
       }
 
@@ -140,7 +170,11 @@ export default function App() {
       await registerReferralCode(uid, referralCode);
     }
 
-    const enrichedProfile = { ...profile, referralCode };
+    const enrichedProfile = ensureProfileDefaults({
+      ...profile,
+      referralCode,
+      name: firebaseUser?.displayName || profile.name || "",
+    });
     setUserProfile(enrichedProfile);
     setIsOnboarded(true);
     const profileToMode = { commute: "low", night: "focus", morning: "rapid" };
@@ -169,6 +203,7 @@ export default function App() {
   };
 
   const handleStartStudySession = (queue, mode = "low", startIndex = 0) => {
+    sessionXPRef.current = 0;
     setSessionQueue(queue);
     setEnergyMode(mode);
     setTab("study_session");
@@ -220,7 +255,26 @@ export default function App() {
     }
   };
 
-  const passStats = calculatePassProbability(userProfile, 0);
+  const passStats = useMemo(() => calculatePassProbability(userProfile, 0), [userProfile]);
+
+  const handlePairPartner = async () => {
+    if (!firebaseUser) { setPairError("Sign in to pair with partners."); return; }
+    setPairLoading(true); setPairError("");
+    const result = await pairWithPartner(firebaseUser.uid, pairCode, userProfile);
+    setPairLoading(false);
+    if (result.error) { setPairError(result.error); return; }
+    const updatedProfile = { ...userProfile, partnerIds: result.newPartnerIds };
+    setUserProfile(updatedProfile);
+    syncWrite(firebaseUser.uid, "profile", "caiib_user_profile", updatedProfile);
+    if (result.partnerProfile) setPartners(prev => [...prev, result.partnerProfile]);
+    setPairCode(""); setPairError("");
+  };
+
+  const handleSendNudge = async (partnerUid) => {
+    if (!firebaseUser) return;
+    await sendNudge(firebaseUser.uid, partnerUid);
+    setNudgeSent(prev => ({ ...prev, [partnerUid]: true }));
+  };
 
   const roleLabel = userProfile?.role === "credit" ? "Credit Officer"
     : userProfile?.role === "treasury" ? "Treasury Officer"
@@ -254,6 +308,7 @@ export default function App() {
         button { font-family: inherit; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .spin-animate { animation: spin 0.8s linear infinite; }
+        @keyframes confettiFall { 0% { transform: translateY(-20px) rotate(0deg); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: 0; } }
       `}</style>
 
       {/* App Shell — max width keeps it comfortable on desktop */}
@@ -275,12 +330,15 @@ export default function App() {
               <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "practice" ? "Practice" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Sync status */}
-              <button onClick={handleTriggerSync} disabled={isSyncing}
-                style={{ background: "none", border: "none", display: "flex", alignItems: "center", gap: 4, color: C.muted, fontSize: 10, cursor: "pointer", padding: 0 }}>
-                <RefreshCw size={12} className={isSyncing ? "spin-animate" : ""} color={C.teal} />
-                <span style={{ color: C.teal, fontSize: 10, fontWeight: 600 }}>{isSyncing ? "Syncing…" : `Sync: ${lastSyncTime}`}</span>
-              </button>
+              {/* Streak + career rank */}
+              {userProfile && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: C.warn }}>🔥 {userProfile.streak || 0}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: C.dim, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 6px" }}>
+                    {userProfile.careerTitle || "Novice"}
+                  </span>
+                </div>
+              )}
               {/* Settings */}
               <button onClick={() => setShowSettings(true)}
                 style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
@@ -443,10 +501,17 @@ export default function App() {
                 </div>
               )}
 
-              {/* DB info */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
-                <span style={{ color: C.muted, fontSize: 12 }}>Local DB size</span>
-                <span style={{ color: C.text, fontWeight: 600, fontSize: 12 }}>{dbSize}</span>
+              {/* Sync & DB info */}
+              <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, margin: 0 }}>Local DB · {dbSize}</p>
+                  <p style={{ color: C.dim, fontSize: 10, margin: "2px 0 0" }}>Last synced: {lastSyncTime}</p>
+                </div>
+                <button onClick={handleTriggerSync} disabled={isSyncing}
+                  style={{ background: isSyncing ? C.card : `${C.teal}20`, border: `1px solid ${C.teal}44`, borderRadius: 8, padding: "6px 12px", color: C.teal, fontSize: 11, fontWeight: 700, cursor: isSyncing ? "default" : "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                  <RefreshCw size={12} className={isSyncing ? "spin-animate" : ""} color={C.teal} />
+                  {isSyncing ? "Syncing…" : "Sync now"}
+                </button>
               </div>
 
               {/* Legal */}
@@ -514,13 +579,13 @@ export default function App() {
                     <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Daily cards used</span>
+                          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Cards left today</span>
                           <span style={{ color: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.text, fontSize: 11, fontWeight: 700 }}>
-                            {dailyCardCount} / {FREE_DAILY_CARD_LIMIT}
+                            {Math.max(0, FREE_DAILY_CARD_LIMIT - dailyCardCount)} / {FREE_DAILY_CARD_LIMIT}
                           </span>
                         </div>
                         <div style={{ height: 4, background: C.border, borderRadius: 99 }}>
-                          <div style={{ height: 4, borderRadius: 99, background: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.accent, width: `${Math.min(100, (dailyCardCount / FREE_DAILY_CARD_LIMIT) * 100)}%`, transition: "width 0.3s" }} />
+                          <div style={{ height: 4, borderRadius: 99, background: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.accent, width: `${Math.max(0, 100 - (dailyCardCount / FREE_DAILY_CARD_LIMIT) * 100)}%`, transition: "width 0.3s" }} />
                         </div>
                       </div>
                       <button onClick={() => setPaywallTrigger("generic")}
@@ -669,6 +734,27 @@ export default function App() {
                     );
                   })()}
 
+                  {/* Study Buddies Card */}
+                  <div onClick={() => {
+                    setShowBuddies(true);
+                    setLeaderboardLoading(true);
+                    getWeeklyLeaderboard(userProfile).then(lb => { setLeaderboard(lb); setLeaderboardLoading(false); });
+                  }}
+                    style={{
+                      background: `${C.blue}12`, border: `1.5px solid ${C.blue}33`, borderRadius: 14,
+                      padding: 14, marginBottom: 16, cursor: "pointer", display: "flex", alignItems: "center", gap: 12
+                    }}>
+                    <Users size={20} color={C.blue} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ color: C.blue, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Study Buddies</p>
+                      <p style={{ color: C.text, fontSize: 13, fontWeight: 600, margin: "2px 0 0" }}>
+                        {partners.length > 0 ? `${partners.length} partner${partners.length > 1 ? "s" : ""} linked` : "Link study partners"}
+                      </p>
+                      <p style={{ color: C.muted, fontSize: 11, margin: 0 }}>Nudge, compete & track weekly XP →</p>
+                    </div>
+                    <ChevronRight size={16} color={C.blue} />
+                  </div>
+
                   {/* Pass Probability Snapshot */}
                   <div onClick={() => setTab("strategy")}
                     style={{
@@ -798,6 +884,7 @@ export default function App() {
               {/* PASS OPTIMIZER SCREEN */}
               {tab === "strategy" && (
                 <PassOptimizer userProfile={userProfile} activeElective={userProfile?.elective}
+                  partners={partners}
                   onReviseWeakness={(lessonId) => {
                     const lesson = MICRO_LESSONS.find(l => l.id === lessonId);
                     if (lesson) handleStartStudySession([lesson], "rapid");
@@ -817,6 +904,21 @@ export default function App() {
                     <p style={{ color: C.muted, fontSize: 13, margin: 0, lineHeight: 1.5 }}>
                       Progress logged and synced locally.<br />Your SM-2 intervals have been updated.
                     </p>
+                  </div>
+                  {/* XP + streak summary */}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                    <div style={{ background: `${C.accent}18`, border: `1.5px solid ${C.accent}44`, borderRadius: 12, padding: "10px 18px", textAlign: "center" }}>
+                      <p style={{ color: C.accent, fontSize: 20, fontWeight: 800, margin: 0 }}>+{lastSessionXP}</p>
+                      <p style={{ color: C.muted, fontSize: 10, margin: "2px 0 0", fontWeight: 600 }}>XP EARNED</p>
+                    </div>
+                    <div style={{ background: `${C.warn}18`, border: `1.5px solid ${C.warn}44`, borderRadius: 12, padding: "10px 18px", textAlign: "center" }}>
+                      <p style={{ color: C.warn, fontSize: 20, fontWeight: 800, margin: 0 }}>🔥 {userProfile?.streak ?? 0}</p>
+                      <p style={{ color: C.muted, fontSize: 10, margin: "2px 0 0", fontWeight: 600 }}>DAY STREAK</p>
+                    </div>
+                    <div style={{ background: `${C.blue}18`, border: `1.5px solid ${C.blue}44`, borderRadius: 12, padding: "10px 18px", textAlign: "center" }}>
+                      <p style={{ color: C.blue, fontSize: 14, fontWeight: 800, margin: 0 }}>{userProfile?.careerTitle || "Novice"}</p>
+                      <p style={{ color: C.muted, fontSize: 10, margin: "2px 0 0", fontWeight: 600 }}>RANK</p>
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 280 }}>
                     <button onClick={() => { setTab("home"); }}
@@ -857,6 +959,14 @@ export default function App() {
                 <StudyPanel sessionQueue={sessionQueue} energyMode={energyMode} setTab={setTab}
                   initialIndex={resumeIndex}
                   onCardAdvance={(idx) => {
+                    // +10 XP per card (all except the last; last is handled in onSessionComplete)
+                    sessionXPRef.current += 10;
+                    const uid = firebaseUser?.uid ?? null;
+                    const updated = computeStreakAndXP(userProfileRef.current, { cardXP: 10 });
+                    userProfileRef.current = updated;
+                    setUserProfile(updated);
+                    syncWrite(uid, "profile", "caiib_user_profile", updated);
+
                     saveSessionCheckpoint({ subjectId: activeSubject, energyMode, queueIds: sessionQueue.map(l => l.id), currentIndex: idx });
                     if (!isPremium) {
                       const newCount = dailyCardCount + 1;
@@ -864,7 +974,21 @@ export default function App() {
                       localStorage.setItem("caiib_daily_cards", JSON.stringify({ date: new Date().toDateString(), count: newCount }));
                     }
                   }}
-                  onSessionComplete={() => { clearSessionCheckpoint(); setCheckpoint(null); setResumeIndex(0); setTab("session_complete"); }} />
+                  onSessionComplete={() => {
+                    // +10 XP for last card + 50 session bonus
+                    sessionXPRef.current += 60;
+                    const uid = firebaseUser?.uid ?? null;
+                    const updated = computeStreakAndXP(userProfileRef.current, { cardXP: 10, sessionBonus: true });
+                    userProfileRef.current = updated;
+                    setUserProfile(updated);
+                    syncWrite(uid, "profile", "caiib_user_profile", updated);
+                    setLastSessionXP(sessionXPRef.current);
+
+                    setShowConfetti(true);
+                    setTimeout(() => setShowConfetti(false), 3500);
+
+                    clearSessionCheckpoint(); setCheckpoint(null); setResumeIndex(0); setTab("session_complete");
+                  }} />
               )}
             </>
           )}
@@ -907,6 +1031,143 @@ export default function App() {
       {/* Paywall modal */}
       {paywallTrigger && (
         <PaywallModal trigger={paywallTrigger} onClose={() => setPaywallTrigger(null)} />
+      )}
+
+      {/* Confetti overlay — shown for 3.5s on session complete */}
+      {showConfetti && (
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 500 }}>
+          {["#F59E0B","#10B981","#3B82F6","#EF4444","#8B5CF6","#06B6D4","#FBBF24","#F472B6"].flatMap((color, ci) =>
+            [0,1,2,3].map(j => {
+              const i = ci * 4 + j;
+              return (
+                <div key={i} style={{
+                  position: "absolute", top: 0, left: `${(i * 3.1 + 2) % 98}%`,
+                  width: i % 3 === 0 ? 10 : 7, height: i % 3 === 0 ? 10 : 7,
+                  background: color, borderRadius: i % 2 === 0 ? "50%" : 2,
+                  animation: `confettiFall ${1.2 + (i % 5) * 0.25}s ${(i % 8) * 0.12}s ease-in forwards`,
+                }} />
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Nudge banner */}
+      {nudgeBanner && (
+        <div style={{
+          position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)",
+          background: C.surf, border: `1.5px solid ${C.teal}`, borderRadius: 12,
+          padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
+          zIndex: 200, maxWidth: 440, width: "calc(100% - 32px)", boxShadow: "0 4px 24px rgba(0,0,0,0.4)"
+        }}>
+          <Bell size={16} color={C.teal} />
+          <span style={{ color: C.text, fontSize: 12, fontWeight: 600, flex: 1 }}>{nudgeBanner}</span>
+          <button onClick={() => setNudgeBanner(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      )}
+
+      {/* Study Buddies Drawer */}
+      {showBuddies && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={() => setShowBuddies(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)" }} />
+          <div style={{
+            position: "relative", width: "100%", maxWidth: 480,
+            background: C.surf, borderRadius: "20px 20px 0 0",
+            border: `1px solid ${C.border}`, borderBottom: "none",
+            padding: "20px 20px 32px", display: "flex", flexDirection: "column", gap: 16,
+            zIndex: 1, maxHeight: "85vh", overflowY: "auto"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Users size={18} color={C.blue} />
+                <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Study Buddies</span>
+              </div>
+              <button onClick={() => setShowBuddies(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={20} /></button>
+            </div>
+
+            {/* Link a partner */}
+            <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>Link a Study Partner</span>
+              <p style={{ color: C.muted, fontSize: 11, margin: 0 }}>Enter your partner's 8-character referral code to pair with them.</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={pairCode} onChange={e => { setPairCode(e.target.value.toUpperCase()); setPairError(""); }}
+                  placeholder="e.g. DHRU8K2P"
+                  maxLength={8}
+                  style={{ flex: 1, background: C.cardAlt, border: `1.5px solid ${pairError ? C.err : C.border}`, borderRadius: 8, color: C.text, fontSize: 13, fontFamily: "monospace", fontWeight: 700, letterSpacing: "0.1em", padding: "8px 12px", outline: "none" }}
+                />
+                <button
+                  disabled={pairCode.length < 6 || pairLoading}
+                  onClick={handlePairPartner}
+                  style={{ background: C.blue, border: "none", borderRadius: 8, padding: "8px 14px", color: "#000", fontSize: 12, fontWeight: 700, cursor: pairCode.length >= 6 && !pairLoading ? "pointer" : "not-allowed", opacity: pairCode.length >= 6 && !pairLoading ? 1 : 0.5 }}>
+                  {pairLoading ? "…" : "Link"}
+                </button>
+              </div>
+              {pairError && <p style={{ color: C.err, fontSize: 11, margin: 0 }}>{pairError}</p>}
+            </div>
+
+            {/* Partner list */}
+            {partners.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Your Partners</span>
+                {partners.map(p => (
+                  <div key={p.uid} style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${C.blue}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <User size={18} color={C.blue} />
+                    </div>
+                    <div style={{ flex: 1, overflow: "hidden" }}>
+                      <p style={{ color: C.text, fontSize: 13, fontWeight: 700, margin: 0 }}>{p.name}</p>
+                      <p style={{ color: C.muted, fontSize: 11, margin: "2px 0 0" }}>
+                        {p.careerTitle} · 🔥 {p.streak} days · {(p.xp || 0).toLocaleString()} XP
+                      </p>
+                    </div>
+                    <button
+                      disabled={nudgeSent[p.uid]}
+                      onClick={() => handleSendNudge(p.uid)}
+                      style={{ background: nudgeSent[p.uid] ? C.card : `${C.teal}22`, border: `1px solid ${nudgeSent[p.uid] ? C.border : C.teal}`, borderRadius: 8, padding: "6px 10px", color: nudgeSent[p.uid] ? C.dim : C.teal, fontSize: 11, fontWeight: 700, cursor: nudgeSent[p.uid] ? "default" : "pointer", flexShrink: 0 }}>
+                      {nudgeSent[p.uid] ? "Nudged ✓" : "Nudge"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Weekly Leaderboard */}
+            {leaderboardLoading && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                <div className="spin-animate" style={{ width: 14, height: 14, border: `2px solid ${C.border}`, borderTop: `2px solid ${C.teal}`, borderRadius: "50%" }} />
+                <span style={{ color: C.muted, fontSize: 11 }}>Loading leaderboard…</span>
+              </div>
+            )}
+            {!leaderboardLoading && leaderboard.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Weekly XP Leaderboard</span>
+                {leaderboard.map((entry, rank) => (
+                  <div key={entry.uid} style={{
+                    background: entry.isSelf ? `${C.accent}12` : C.card,
+                    border: `1.5px solid ${entry.isSelf ? `${C.accent}44` : C.border}`,
+                    borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10
+                  }}>
+                    <span style={{ color: rank === 0 ? C.accent : C.muted, fontWeight: 800, fontSize: 14, width: 20, textAlign: "center" }}>
+                      {rank === 0 ? "🥇" : rank === 1 ? "🥈" : rank === 2 ? "🥉" : `${rank + 1}`}
+                    </span>
+                    <div style={{ flex: 1, overflow: "hidden" }}>
+                      <p style={{ color: entry.isSelf ? C.accent : C.text, fontSize: 12, fontWeight: 700, margin: 0 }}>{entry.name}</p>
+                      <p style={{ color: C.muted, fontSize: 10, margin: "1px 0 0" }}>{entry.careerTitle} · 🔥 {entry.streak} days</p>
+                    </div>
+                    <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{(entry.xp || 0).toLocaleString()} XP</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!leaderboardLoading && partners.length === 0 && leaderboard.length === 0 && (
+              <p style={{ color: C.muted, fontSize: 12, textAlign: "center", padding: "10px 0" }}>
+                Link a partner above to start competing on the leaderboard.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

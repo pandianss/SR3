@@ -21,6 +21,9 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
   const timerRef = useRef(null);
   const [timerCount, setTimerCount] = useState(90);
 
+  // Commute Auto-Play — hands-free mode for low energy sessions
+  const [autoPlay, setAutoPlay] = useState(false);
+
   // Dynamic Gemini states (Step 1 Roadmap)
   const [aiCaseLoading, setAiCaseLoading] = useState(false);
   const [aiExplanation, setAiExplanation] = useState("");
@@ -208,6 +211,18 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
           </p>
         </div>
 
+        {/* Commute Auto-Play Toggle */}
+        {energyMode === "low" && (
+          <button onClick={() => setAutoPlay(p => !p)}
+            style={{
+              background: autoPlay ? C.teal : C.card, border: `1px solid ${autoPlay ? C.teal : C.border}`,
+              borderRadius: 8, padding: "4px 10px", color: autoPlay ? "#000" : C.muted,
+              fontSize: 10, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap"
+            }}>
+            {autoPlay ? "◼ Auto ON" : "▶ Auto-Play"}
+          </button>
+        )}
+
         {/* Deep Focus Controls */}
         {energyMode === "focus" && (
           <div style={{ display: "flex", gap: 6 }}>
@@ -302,7 +317,11 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
 
                 {/* Simulated Audio Mode for Low Energy/Commuting */}
                 {energyMode === "low" && (
-                  <AudioPlayer textToRead={getSpeechText()} title={conceptStep.title} />
+                  <AudioPlayer
+                    textToRead={getSpeechText()} title={conceptStep.title}
+                    autoStart={autoPlay}
+                    onEnd={() => { if (autoPlay) handleNextSubStep(); }}
+                  />
                 )}
               </div>
             )}
@@ -329,7 +348,11 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
                 ))}
 
                 {energyMode === "low" && (
-                  <AudioPlayer textToRead={getSpeechText()} title={pillarsStep.title} />
+                  <AudioPlayer
+                    textToRead={getSpeechText()} title={pillarsStep.title}
+                    autoStart={autoPlay}
+                    onEnd={() => { if (autoPlay) handleRate(3); }}
+                  />
                 )}
               </div>
             )}
@@ -480,8 +503,8 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
                         padding: "12px 16px", cursor: "pointer", color: C.text, fontSize: 12,
                         fontWeight: 600, transition: "all 0.2s", textAlign: "center"
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = opt.color; e.currentTarget.style.background = opt.bg; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card; }}>
+                      onPointerEnter={(e) => { e.currentTarget.style.borderColor = opt.color; e.currentTarget.style.background = opt.bg; }}
+                      onPointerLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card; }}>
                       {opt.label}
                     </button>
                   ))}

@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { Play, Pause, Square, Volume2, FastForward } from "lucide-react";
 import { C } from "../theme";
 
-export default function AudioPlayer({ textToRead, title }) {
+// onEnd   — called when the last sentence finishes playing (use for auto-play chaining)
+// autoStart — if true, begin playback automatically on mount (commute auto-play)
+export default function AudioPlayer({ textToRead, title, onEnd, autoStart = false }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [rate, setRate] = useState(1);
   const [voices, setVoices] = useState([]);
@@ -14,6 +16,8 @@ export default function AudioPlayer({ textToRead, title }) {
   const rateRef = useRef(1);
   // Pre-generate stable animation durations so the waveform doesn't flicker on re-render.
   const waveDurations = useRef([...Array(12)].map(() => `${(0.5 + Math.random() * 0.5).toFixed(2)}s`));
+  // Always-current reference to startSpeech — avoids stale closure in autoStart effect.
+  const startSpeechRef = useRef(null);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -90,7 +94,7 @@ export default function AudioPlayer({ textToRead, title }) {
       if (activeVoice) utterance.voice = activeVoice;
 
       if (idx === sentences.length - 1) {
-        utterance.onend = () => setIsPlaying(false);
+        utterance.onend = () => { setIsPlaying(false); onEnd?.(); };
         utterance.onerror = () => setIsPlaying(false);
       }
 
@@ -99,6 +103,17 @@ export default function AudioPlayer({ textToRead, title }) {
 
     setIsPlaying(true);
   };
+
+  // Keep ref current so the autoStart effect always calls the latest version.
+  startSpeechRef.current = startSpeech;
+
+  // Auto-start playback on mount when requested (commute auto-play mode).
+  // 400ms delay gives voices time to load before speaking.
+  useEffect(() => {
+    if (!autoStart) return;
+    const t = setTimeout(() => startSpeechRef.current?.(), 400);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePlayPause = () => {
     if (!synthRef.current) return;

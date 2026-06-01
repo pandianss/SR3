@@ -3,6 +3,7 @@ import { C } from "../theme";
 import { SUBJECTS, ELECTIVES } from "../data/contentGraph";
 import { getPracticeSet, getQuestionsForSubject } from "../data/questionBank";
 import { CheckCircle, XCircle, RotateCcw, ChevronRight, Target } from "lucide-react";
+import { FREE_SUBJECTS } from "../utils/subscription";
 
 const DIFFICULTIES = ["All", "Easy", "Medium", "Hard"];
 
@@ -17,11 +18,9 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
   const [showExplain, setShowExplain]       = useState(false);
   const [sessionSize]                       = useState(10);
 
-  const FREE_SUBJECTS = ["ABM", "BFM"];
-
-  function startSession() {
-    let pool = getQuestionsForSubject(activeSubject);
-    if (difficulty !== "All") pool = pool.filter(q => q.difficulty === difficulty);
+  function startSession(subject = activeSubject, diff = difficulty) {
+    let pool = getQuestionsForSubject(subject);
+    if (diff !== "All") pool = pool.filter(q => q.difficulty === diff);
     const set = [...pool].sort(() => Math.random() - 0.5).slice(0, sessionSize);
     setQuestions(set);
     setCurrentIdx(0);
@@ -31,7 +30,7 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
     setShowExplain(false);
   }
 
-  useEffect(() => { startSession(); }, [activeSubject, difficulty]);
+  useEffect(() => { startSession(activeSubject, difficulty); }, [activeSubject, difficulty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const q = questions[currentIdx];
   const isCorrect = picked === q?.correct;
@@ -70,7 +69,7 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
             style={{ flex: 1, background: C.accent, border: "none", borderRadius: 12, padding: "12px 0", color: "#000", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
             <RotateCcw size={14} /> Try Again
           </button>
-          <button onClick={() => { setDifficulty("Hard"); startSession(); }}
+          <button onClick={() => { setDifficulty("Hard"); startSession(activeSubject, "Hard"); }}
             style={{ flex: 1, background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "12px 0", color: C.text, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
             Hard Only
           </button>
@@ -130,7 +129,7 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
           <span style={{ color: C.teal, fontSize: 11, fontWeight: 700 }}>{score} correct</span>
         </div>
         <div style={{ height: 4, background: C.border, borderRadius: 99 }}>
-          <div style={{ height: 4, borderRadius: 99, background: C.accent, width: `${((currentIdx) / total) * 100}%`, transition: "width 0.3s" }} />
+          <div style={{ height: 4, borderRadius: 99, background: C.accent, width: `${total > 0 ? ((currentIdx + 1) / total) * 100 : 0}%`, transition: "width 0.3s" }} />
         </div>
       </div>
 

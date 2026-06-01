@@ -123,6 +123,9 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
           ))}
         </div>
 
+        {/* Error shown above CTA so it's visible before tapping */}
+        {error && <p style={{ color: C.err, fontSize: 12, textAlign: "center", margin: 0, background: `${C.err}10`, border: `1px solid ${C.err}33`, borderRadius: 8, padding: "8px 12px" }}>{error}</p>}
+
         {/* CTA */}
         <button onClick={handlePurchase} disabled={loading}
           style={{
@@ -141,8 +144,6 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
           Billed via Google Play · Cancel anytime in Play Store → Subscriptions<br />
           {SERIES.name} · {APP.name} · Not affiliated with IIBF
         </p>
-
-        {error && <p style={{ color: C.err, fontSize: 12, textAlign: "center", margin: 0 }}>{error}</p>}
       </div>
     </div>
   );

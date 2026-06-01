@@ -3,7 +3,7 @@ import { calculatePassProbability, analyzeMistakePatterns, generateStudySchedule
 import { TrendingUp, AlertTriangle, Lightbulb, Play, Settings } from "lucide-react";
 import { C, getSubColor } from "../theme";
 
-export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective }) {
+export default function PassOptimizer({ userProfile, onReviseWeakness, activeElective, partners = [] }) {
   const [studyAdjust, setStudyAdjust] = useState(0);
   const [data, setData] = useState({
     probability: 50,
@@ -143,6 +143,11 @@ export default function PassOptimizer({ userProfile, onReviseWeakness, activeEle
                 <div>
                   <span style={{ color, fontWeight: 700, fontSize: 13 }}>{sub}</span>
                   {isAtRisk && <span style={{ color: C.err, fontSize: 10, marginLeft: 8, fontWeight: 600 }}>⚠ Risk Zone</span>}
+                  {partners.filter(p => p.elective === sub || p.elective?.toUpperCase() === sub).map(p => (
+                    <span key={p.uid} style={{ display: "inline-block", marginLeft: 8, fontSize: 9, fontWeight: 700, color: C.teal, background: `${C.teal}18`, border: `1px solid ${C.teal}33`, borderRadius: 4, padding: "1px 5px" }}>
+                      👥 {p.name.split(" ")[0]} · {(p.xp || 0).toLocaleString()} XP
+                    </span>
+                  ))}
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <span style={{ color: C.muted, fontSize: 11 }}>

@@ -77,3 +77,21 @@ export function localWrite(localKey, data) {
     console.warn("[syncStore] localStorage write failed:", e);
   }
 }
+
+/**
+ * Ensure a profile loaded from storage/Firestore has all new fields
+ * with safe defaults. Existing values are never overwritten.
+ * Also the caller should { merge: true } on the next Firestore write
+ * so remote documents are backfilled automatically.
+ */
+export function ensureProfileDefaults(profile) {
+  return {
+    streak: 0,
+    xp: 0,
+    level: 1,
+    careerTitle: "Novice",
+    lastActiveDateUTC: "",
+    partnerIds: [],
+    ...profile,
+  };
+}
