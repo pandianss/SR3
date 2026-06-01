@@ -25,6 +25,20 @@ export default defineConfig(({ mode }) => {
       ),
     },
 
+    build: {
+      // microLessons.js and PracticeQuiz (questionBank) are large content-data
+      // chunks that load deferred — not code bloat, so suppress the warning.
+      chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/firebase")) return "vendor-firebase";
+            if (id.includes("node_modules/lucide-react")) return "vendor-ui";
+          }
+        }
+      }
+    },
+
     server: {
       proxy: {
         '/api': {

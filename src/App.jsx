@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import {
   BookOpen, Brain, Zap, Clock, TrendingUp, Home,
   BarChart2, FlaskConical, Play, AlertTriangle,
@@ -8,7 +8,7 @@ import {
   LogOut, User, PenLine, Users, Bell
 } from "lucide-react";
 
-import { SUBJECTS, ELECTIVES, MODULES, TOPICS, MICRO_LESSONS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
+import { SUBJECTS, ELECTIVES, MODULES, TOPICS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
 import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint, computeStreakAndXP } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
@@ -31,7 +31,7 @@ import StudyPanel from "./components/StudyPanel";
 import RevisionInbox from "./components/RevisionInbox";
 import PassOptimizer from "./components/PassOptimizer";
 import Circulars from "./components/Circulars";
-import PracticeQuiz from "./components/PracticeQuiz";
+const PracticeQuiz = lazy(() => import("./components/PracticeQuiz"));
 
 export default function App() {
   // ── Auth state ──────────────────────────────────────────────────────────────
@@ -78,6 +78,9 @@ export default function App() {
   const [checkpoint, setCheckpoint] = useState(null);
   const [resumeIndex, setResumeIndex] = useState(0);
 
+  // Lesson data — loaded asynchronously so the initial bundle stays small
+  const [MICRO_LESSONS, setMicroLessons] = useState([]);
+
   // Referral
   const [referralStats, setReferralStats] = useState(null);
   const [lastSessionXP, setLastSessionXP] = useState(0);
@@ -104,7 +107,11 @@ export default function App() {
 
   // ── Bootstrap: auth listener + cloud sync ──────────────────────────────────
   useEffect(() => {
-    seedMockSpacedRepetitionData(MICRO_LESSONS, FORMULAS);
+    // Load lesson data asynchronously — keeps the initial bundle ~1.3 MB lighter.
+    import("./data/microLessons").then(m => {
+      setMicroLessons(m.MICRO_LESSONS);
+      seedMockSpacedRepetitionData(m.MICRO_LESSONS, FORMULAS);
+    });
 
     const unsub = subscribeToAuthState(async (user) => {
       setFirebaseUser(user);
@@ -875,6 +882,7 @@ export default function App() {
               {/* REVISION INBOX SCREEN */}
               {tab === "revision" && (
                 <RevisionInbox activeElective={userProfile?.elective}
+                  microLessons={MICRO_LESSONS}
                   onStartRevision={(lessons, formulas) => {
                     const combined = [...lessons, ...formulas];
                     handleStartStudySession(combined, "rapid");
@@ -942,11 +950,17 @@ export default function App() {
 
               {/* PRACTICE QUIZ SCREEN */}
               {tab === "practice" && (
-                <PracticeQuiz
-                  userProfile={userProfile}
-                  isPremium={isPremium}
-                  onPaywall={setPaywallTrigger}
-                />
+                <Suspense fallback={
+                  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div className="spin-animate" style={{ width: 28, height: 28, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.accent}`, borderRadius: "50%" }} />
+                  </div>
+                }>
+                  <PracticeQuiz
+                    userProfile={userProfile}
+                    isPremium={isPremium}
+                    onPaywall={setPaywallTrigger}
+                  />
+                </Suspense>
               )}
 
               {/* RBI CIRCULARS SCREEN */}

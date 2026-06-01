@@ -1,17 +1,17 @@
 import { useState, useEffect } from "react";
 import { getRevisionQueue, getMemoryStrengthStats, getAllCardStates } from "../utils/spacedRepetition";
-import { MICRO_LESSONS, FORMULAS } from "../data/contentGraph";
+import { FORMULAS } from "../data/contentGraph";
 import { BookOpen, FlaskConical, Play, CheckCircle, RefreshCcw, Brain, Award } from "lucide-react";
 import { C, getSubColor } from "../theme";
 
-export default function RevisionInbox({ onStartRevision, activeElective }) {
+export default function RevisionInbox({ onStartRevision, activeElective, microLessons = [] }) {
   const [queue, setQueue] = useState({ dueLessons: [], dueFormulas: [] });
   const [stats, setStats] = useState({ mastered: 0, reviewing: 0, forgotten: 0, unreviewed: 0, retentionRate: 0 });
   const [filter, setFilter] = useState("all"); // all, lessons, formulas
 
   useEffect(() => {
     // Filter down to syllabus content matching active elective (or core)
-    const availableLessons = MICRO_LESSONS.filter(l => l.subjectId !== "Risk" || activeElective === "Risk");
+    const availableLessons = microLessons.filter(l => l.subjectId !== "Risk" || activeElective === "Risk");
     // Also include other electives if any (they aren't loaded in MICRO_LESSONS yet, but good practice)
     
     const { dueLessons, dueFormulas } = getRevisionQueue(availableLessons, FORMULAS);
