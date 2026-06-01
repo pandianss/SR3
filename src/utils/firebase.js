@@ -2,6 +2,8 @@
 // All config values come from VITE_ env vars so they are
 // baked into the client bundle at build time (safe for Firebase public config).
 
+import { Capacitor } from "@capacitor/core";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { initializeApp } from "firebase/app";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import {
@@ -9,6 +11,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
+  signInWithCredential,
   getRedirectResult,
   signOut,
   onAuthStateChanged
@@ -52,15 +55,29 @@ const googleProvider = app ? new GoogleAuthProvider() : null;
 
 export async function signInWithGoogle() {
   if (!auth) throw new Error("Firebase not configured");
+
+  if (Capacitor.isNativePlatform()) {
+    // ── Native Android / iOS ──────────────────────────────────────────────────
+    // Uses the platform Google Sign-In SDK so no WebView popup or redirect is
+    // needed. Requires the debug/release SHA-1 registered in Firebase Console
+    // and a matching Android OAuth client in google-services.json (client_type 1).
+    const { credential: nativeCredential } = await FirebaseAuthentication.signInWithGoogle();
+    if (!nativeCredential?.idToken) {
+      throw new Error("Google sign-in cancelled or failed — no credential returned.");
+    }
+    const credential = GoogleAuthProvider.credential(nativeCredential.idToken);
+    const result = await signInWithCredential(auth, credential);
+    return result.user;
+  }
+
+  // ── Web browser ───────────────────────────────────────────────────────────
   try {
-    // Popup works on web; Capacitor needs redirect — handled in Phase 2
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (err) {
-    // Popup blocked (e.g. mobile WebView) — fall back to redirect
     if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
       await signInWithRedirect(auth, googleProvider);
-      return null; // page will reload; getRedirectResult handles the rest
+      return null; // page reloads; onAuthStateChanged picks up the result
     }
     throw err;
   }
