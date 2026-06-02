@@ -20,8 +20,13 @@ export default function AuthScreen({ onSignedIn }) {
     setError("");
     try {
       const user = await signInWithGoogle();
-      // Pass referral code up so App.jsx can link it after profile creation
-      if (user && onSignedIn) onSignedIn(user, referralInput.trim().toUpperCase());
+      if (user && onSignedIn) {
+        // Success — App will unmount this screen via onAuthStateChanged.
+        onSignedIn(user, referralInput.trim().toUpperCase());
+      } else {
+        // null = user cancelled the sheet, or a web redirect is navigating away.
+        setLoading(false);
+      }
     } catch (err) {
       setError(err.message || "Sign-in failed. Please try again.");
       setLoading(false);

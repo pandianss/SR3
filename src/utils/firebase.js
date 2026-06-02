@@ -3,7 +3,6 @@
 // baked into the client bundle at build time (safe for Firebase public config).
 
 import { Capacitor } from "@capacitor/core";
-import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { initializeApp } from "firebase/app";
 import { getAnalytics, logEvent } from "firebase/analytics";
 import {
@@ -11,10 +10,9 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  signInWithCredential,
-  getRedirectResult,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  signInWithCredential
 } from "firebase/auth";
 import {
   getFirestore,
@@ -53,40 +51,45 @@ export function track(eventName, params = {}) {
 
 const googleProvider = app ? new GoogleAuthProvider() : null;
 
+// The Credential Manager / Google sign-in sheet throws when the user dismisses
+// it. That's a normal action, not a failure — detect it so callers can no-op.
+function isUserCancellation(err) {
+  const sig = `${err?.code ?? ""} ${err?.message ?? ""}`.toLowerCase();
+  return sig.includes("cancel"); // covers "canceled" and "cancelled" too
+}
+
 export async function signInWithGoogle() {
   if (!auth) throw new Error("Firebase not configured");
 
   if (Capacitor.isNativePlatform()) {
-    // ── Native Android / iOS ──────────────────────────────────────────────────
-    // Uses the platform Google Sign-In SDK so no WebView popup or redirect is
-    // needed. Requires the debug/release SHA-1 registered in Firebase Console
-    // and a matching Android OAuth client in google-services.json (client_type 1).
-    const { credential: nativeCredential } = await FirebaseAuthentication.signInWithGoogle();
-    if (!nativeCredential?.idToken) {
-      throw new Error("Google sign-in cancelled or failed — no credential returned.");
-    }
-    const credential = GoogleAuthProvider.credential(nativeCredential.idToken);
-    const result = await signInWithCredential(auth, credential);
-    return result.user;
-  }
+    try {
+      const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+      const result = await FirebaseAuthentication.signInWithGoogle();
 
-  // ── Web browser ───────────────────────────────────────────────────────────
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
-  } catch (err) {
-    if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
-      await signInWithRedirect(auth, googleProvider);
-      return null; // page reloads; onAuthStateChanged picks up the result
+      if (!result?.credential?.idToken) {
+        throw new Error("No ID token received from native Google sign-in.");
+      }
+      const credential = GoogleAuthProvider.credential(result.credential.idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      return userCredential.user;
+    } catch (err) {
+      if (isUserCancellation(err)) return null; // user dismissed the sheet — no-op
+      console.error("[Firebase Native Auth] Google sign-in failed:", err);
+      throw err;
     }
-    throw err;
+  } else {
+    // Browser flow (Web development)
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      return result.user;
+    } catch (err) {
+      if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+        await signInWithRedirect(auth, googleProvider);
+        return null;
+      }
+      throw err;
+    }
   }
-}
-
-export async function handleRedirectResult() {
-  if (!auth) return null;
-  const result = await getRedirectResult(auth);
-  return result?.user ?? null;
 }
 
 export function subscribeToAuthState(callback) {
@@ -96,6 +99,16 @@ export function subscribeToAuthState(callback) {
 
 export async function signOutUser() {
   if (!auth) return;
+  
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
+      await FirebaseAuthentication.signOut();
+    } catch (err) {
+      console.warn("[Firebase Native Auth] native signOut failed:", err.message);
+    }
+  }
+  
   await signOut(auth);
 }
 
