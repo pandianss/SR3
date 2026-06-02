@@ -77,8 +77,9 @@ export const FREE_SUBJECTS = ["ABM", "BFM"]; // free users can study these
  * Returns { isPremium, expiresAt, plan, source }
  */
 export async function loadSubscriptionStatus(uid) {
-  // Dev override — set localStorage key to test premium UI
-  if (localStorage.getItem("caiib_dev_premium") === "true") {
+  // Dev override — set localStorage key to test premium UI.
+  // Gated to dev builds so it cannot be used to unlock premium in the shipped APK.
+  if (import.meta.env.DEV && localStorage.getItem("caiib_dev_premium") === "true") {
     return { isPremium: true, expiresAt: null, plan: "dev", source: "dev_override" };
   }
 

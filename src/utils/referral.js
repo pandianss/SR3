@@ -86,17 +86,25 @@ export async function linkReferral(newUid, referralCode) {
   // Don't let users refer themselves
   if (codeData.ownerUid === newUid) return false;
 
-  // Mark the new user as referred
+  // Mark the new user as referred. This stamp on the (owner-writable) profile
+  // is the source of truth a trusted server uses to compute referral counts.
   await setDoc(
     doc(db, "users", newUid, "profile", "data"),
     { referredBy: referralCode, referredByUid: codeData.ownerUid },
     { merge: true }
   );
 
-  // Increment referrer's count
-  await updateDoc(doc(db, "referralCodes", referralCode), {
-    totalReferred: increment(1),
-  });
+  // The referralCodes counter is Admin-only (anti-fraud — see firestore.rules),
+  // so this client increment is expected to be denied in production. We attempt
+  // it for local/dev convenience but never let a denial break referral linking;
+  // the authoritative count is reconciled server-side from `referredBy` stamps.
+  try {
+    await updateDoc(doc(db, "referralCodes", referralCode), {
+      totalReferred: increment(1),
+    });
+  } catch {
+    /* denied by rules in prod — server reconciles the count */
+  }
 
   return true;
 }

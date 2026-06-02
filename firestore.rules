@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// SuperRecall CAIIB — Firestore security rules
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// Threat model addressed:
+//  - A signed-in user must not be able to grant themselves premium.
+//  - A signed-in user must not be able to fabricate referral counts or
+//    commission (payout) entries.
+//  - All other documents are denied by default.
+//
+// Revenue-critical writes (subscription entitlement, referral counters,
+// commission ledger) are reserved for the Firebase Admin SDK running on the
+// server / Play Billing webhook, which bypasses these rules.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn()      { return request.auth != null; }
+    function isOwner(uid)    { return signedIn() && request.auth.uid == uid; }
+
+    // ── User-owned study data ────────────────────────────────────────────────
+    // Profile is readable by any signed-in user (partners need name/xp/streak
+    // for the leaderboard & co-study panel); only the owner may write it.
+    match /users/{uid}/profile/{doc} {
+      allow read:  if signedIn();
+      allow write: if isOwner(uid);
+    }
+
+    match /users/{uid}/cardStates/{doc}  { allow read, write: if isOwner(uid); }
+    match /users/{uid}/checkpoint/{doc}  { allow read, write: if isOwner(uid); }
+    match /users/{uid}/fcmTokens/{doc}   { allow read, write: if isOwner(uid); }
+
+    // ── Study-buddy nudges ───────────────────────────────────────────────────
+    // Any signed-in user may CREATE a nudge addressed to {uid}, but must stamp
+    // their own uid as the sender. Only the recipient may read or delete.
+    match /users/{uid}/nudges/{nudgeId} {
+      allow read, delete: if isOwner(uid);
+      allow create:       if signedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow update:       if false;
+    }
+
+    // ── Subscription entitlement (READ-ONLY to clients) ──────────────────────
+    // Writing is Admin-only — a client setting isPremium:true is the exact hole
+    // this closes. The server grants/revokes via the Admin SDK.
+    match /users/{uid}/subscription/{doc} {
+      allow read:  if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ── Referral codes ───────────────────────────────────────────────────────
+    // Any signed-in user may look up a code (pairing + referral linking need
+    // this). The owner may create THEIR code with zeroed counters. Counter
+    // mutations are Admin-only so referral counts can't be self-inflated.
+    match /referralCodes/{code} {
+      allow read:   if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.totalReferred == 0
+                    && request.resource.data.totalCommissionEarned == 0;
+      allow update, delete: if false;
+    }
+
+    // ── Commission ledger (payout data) ──────────────────────────────────────
+    // Owner may read their own entries (stats panel); writes are Admin-only.
+    match /commissions/{uid}/{document=**} {
+      allow read:  if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ── Default deny ─────────────────────────────────────────────────────────
+    match /{document=**} { allow read, write: if false; }
+  }
+}
