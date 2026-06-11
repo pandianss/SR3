@@ -2,16 +2,16 @@ import { useState } from "react";
 import { User, Shield, BookOpen, Clock, AlertTriangle, CheckCircle, Zap } from "lucide-react";
 import { C } from "../theme";
 
-export default function Onboarding({ onComplete }) {
+export default function Onboarding({ onComplete, onBack }) {
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState({
     role: "",
     experience: "",
-    elective: "Risk",
-    studyHours: "2",
+    elective: "",
+    studyHours: "",
     weakSubjects: [],
     strongSubjects: [],
-    energyProfile: "commute"
+    energyProfile: ""
   });
 
   const roles = [
@@ -60,18 +60,31 @@ export default function Onboarding({ onComplete }) {
     }));
   };
 
+  const canAdvance = () => {
+    if (step === 1) return !!profile.role;
+    if (step === 2) return !!profile.elective;
+    if (step === 3) return !!profile.studyHours;
+    if (step === 5) return !!profile.energyProfile;
+    return true; // step 4 (subject assessment) is optional
+  };
+
   const handleNext = () => {
     if (step < 5) {
       setStep(step + 1);
     } else {
-      localStorage.setItem("caiib_user_profile", JSON.stringify(profile));
+      const finalProfile = { ...profile, studyHours: profile.studyHours || "2" };
+      localStorage.setItem("caiib_user_profile", JSON.stringify(finalProfile));
       localStorage.setItem("caiib_onboarded", "true");
-      onComplete(profile);
+      onComplete(finalProfile);
     }
   };
 
   const handleBack = () => {
-    if (step > 1) setStep(step - 1);
+    if (step > 1) {
+      setStep(step - 1);
+    } else if (onBack) {
+      onBack();
+    }
   };
 
   return (
@@ -103,9 +116,14 @@ export default function Onboarding({ onComplete }) {
           {step === 1 && "We personalize your default subject expertise based on your job role."}
           {step === 2 && "All electives are supported. Pick yours to load formulas & circulars."}
           {step === 3 && "How much time can you realistically invest daily given bank pressure?"}
-          {step === 4 && "Help us understand your strengths to focus effort where it matters."}
+          {step === 4 && "Optional: tell us what feels weak or strong. You can skip and adjust later."}
           {step === 5 && "We customize content delivery based on your fatigue patterns."}
         </p>
+        {!canAdvance() && (
+          <p style={{ color: C.accent, fontSize: 11, margin: "8px 0 0", fontWeight: 600 }}>
+            ↓ Select an option below to continue
+          </p>
+        )}
       </div>
 
       {/* Steps Content */}
@@ -160,18 +178,35 @@ export default function Onboarding({ onComplete }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 18, textAlign: "center" }}>
               <Clock size={36} color={C.accent} style={{ margin: "10px auto 14px" }} />
-              <p style={{ color: C.text, fontWeight: 700, fontSize: 26, margin: 0 }}>
-                {profile.studyHours} hour{profile.studyHours !== "1" ? "s" : ""} / day
-              </p>
-              <p style={{ color: C.muted, fontSize: 12, marginTop: 4, marginBottom: 14 }}>Suggested baseline for professionals is 2 hours</p>
-              <input type="range" min="1" max="4" step="0.5" value={profile.studyHours}
-                onChange={(e) => setProfile({ ...profile, studyHours: e.target.value })}
-                style={{ width: "100%", accentColor: C.accent, cursor: "pointer" }} />
+              {profile.studyHours ? (
+                <p style={{ color: C.text, fontWeight: 700, fontSize: 26, margin: "0 0 14px" }}>
+                  {profile.studyHours} hour{profile.studyHours !== "1" ? "s" : ""} / day
+                </p>
+              ) : (
+                <p style={{ color: C.muted, fontWeight: 600, fontSize: 16, margin: "0 0 14px" }}>
+                  How many hours can you commit daily?
+                </p>
+              )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                {["1", "1.5", "2", "2.5", "3", "3.5", "4"].map(h => (
+                  <button key={h} onClick={() => setProfile({ ...profile, studyHours: h })}
+                    style={{
+                      background: profile.studyHours === h ? `${C.accent}22` : C.cardAlt,
+                      border: `1.5px solid ${profile.studyHours === h ? C.accent : C.border}`,
+                      borderRadius: 10, padding: "10px 16px", cursor: "pointer",
+                      color: profile.studyHours === h ? C.accent : C.muted,
+                      fontSize: 13, fontWeight: profile.studyHours === h ? 700 : 500,
+                      minWidth: 60, minHeight: 44
+                    }}>
+                    {h}h
+                  </button>
+                ))}
+              </div>
             </div>
             <div style={{ background: `${C.warn}12`, border: `1px solid ${C.warn}33`, borderRadius: 12, padding: 12, display: "flex", gap: 10 }}>
               <AlertTriangle size={18} color={C.warn} style={{ flexShrink: 0 }} />
               <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.4, margin: 0 }}>
-                Setting a higher daily target improves your projected scores, but be realistic — consistency matters more than ambition.
+                Consistency matters more than ambition. Most bankers clear CAIIB on 1.5–2h/day.
               </p>
             </div>
           </div>
@@ -200,7 +235,10 @@ export default function Onboarding({ onComplete }) {
             })}
 
             <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 8, margin: 0 }}>
-              Which subjects are you comfortable with? (Select all)
+              Which subjects are you comfortable with? (Select all that apply)
+            </p>
+            <p style={{ color: C.dim, fontSize: 11, margin: "4px 0 0", lineHeight: 1.4 }}>
+              Subjects marked difficult above are grayed out here — a subject can only be one or the other.
             </p>
             {subjects.map(s => {
               const selected = profile.strongSubjects.includes(s.id);
@@ -212,10 +250,12 @@ export default function Onboarding({ onComplete }) {
                     border: `1.5px solid ${selected ? C.ok : C.border}`,
                     borderRadius: 10, padding: "10px 14px", cursor: disabled ? "not-allowed" : "pointer",
                     opacity: disabled ? 0.3 : 1,
-                    textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center"
+                    textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center",
+                    minHeight: 44
                   }}>
                   <span style={{ color: selected ? C.ok : C.text, fontSize: 12, fontWeight: 600 }}>{s.name}</span>
                   {selected && <CheckCircle size={15} color={C.ok} />}
+                  {disabled && <span style={{ color: C.dim, fontSize: 10 }}>marked difficult</span>}
                 </button>
               );
             })}
@@ -248,23 +288,33 @@ export default function Onboarding({ onComplete }) {
 
       {/* Nav Buttons */}
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        {step > 1 && (
-          <button onClick={handleBack}
+        <button onClick={handleBack}
+          aria-label={step === 1 ? "Back to sign in" : "Go to previous step"}
+          style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: "12px 20px", color: C.text, cursor: "pointer", fontSize: 13, fontWeight: 600
+          }}>
+          ←
+        </button>
+        {step === 4 && (
+          <button onClick={handleNext}
             style={{
               background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
-              padding: "12px 20px", color: C.text, cursor: "pointer", fontSize: 13, fontWeight: 600
+              padding: "12px 16px", color: C.muted, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              whiteSpace: "nowrap"
             }}>
-            Back
+            Skip
           </button>
         )}
         <button onClick={handleNext}
-          disabled={step === 1 && !profile.role}
+          disabled={!canAdvance()}
+          aria-label={step === 5 ? "Complete setup and start studying" : "Go to next step"}
           style={{
             flex: 1, background: C.accent, border: "none", borderRadius: 12,
-            padding: "12px 20px", color: "#000", cursor: (step === 1 && !profile.role) ? "not-allowed" : "pointer",
-            fontSize: 13, fontWeight: 700, opacity: (step === 1 && !profile.role) ? 0.5 : 1
+            padding: "12px 20px", color: "#000", cursor: !canAdvance() ? "not-allowed" : "pointer",
+            fontSize: 13, fontWeight: 700, opacity: !canAdvance() ? 0.45 : 1
           }}>
-          {step === 5 ? "Assemble Engine →" : "Next →"}
+          {step === 5 ? "Start My CAIIB Prep →" : "Next →"}
         </button>
       </div>
     </div>

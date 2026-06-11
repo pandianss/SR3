@@ -58,12 +58,17 @@ export async function requestPushPermission(uid) {
 
   await Push.register();
 
-  // Capture the FCM token and save to Firestore
+  // Capture the FCM token and save to Firestore.
+  // Use a SHA-256 hash of the token as the document ID — avoids the collision
+  // risk of truncating opaque tokens (different tokens may share a suffix).
   Push.addListener("registration", async ({ value: token }) => {
     if (!uid || !db) return;
     try {
+      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+      const docId   = Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 20);
       await setDoc(
-        doc(db, "users", uid, "fcmTokens", token.slice(-20)), // use last 20 chars as doc ID
+        doc(db, "users", uid, "fcmTokens", docId),
         { token, registeredAt: serverTimestamp(), platform: "android" },
         { merge: true }
       );
@@ -117,7 +122,7 @@ export async function scheduleDailyReminder(dueCount = 0) {
   await Local.schedule({
     notifications: [{
       id:       1001,
-      title:    "📚 CAIIB Prep — Review Time",
+      title:    "📚 SuperRecall - CAIIB — Review Time",
       body,
       schedule: { at: next, repeats: true, every: "day" },
       sound:    "default",

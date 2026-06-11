@@ -67,9 +67,15 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
       }
 
       const loadCaseData = async () => {
+        // Skip AI call for low-energy mode or non-premium users — use local fallback immediately.
+        if (energyMode === "low") {
+          setProceduralMath(generateProceduralNumerical(item.topicId));
+          setAiCaseLoading(false);
+          return;
+        }
+
         setAiCaseLoading(true);
         try {
-          // Always try the backend first; returns null on any failure
           const aiCase = await generateAICaseStudy(item.title);
           if (aiCase) {
             setProceduralMath(aiCase);
@@ -189,9 +195,10 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, position: "relative" }}>
         <button onClick={() => setTab("home")}
+          aria-label="Exit study session and return to dashboard"
           style={{
             background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
-            width: 36, height: 36, cursor: "pointer", color: C.muted, fontSize: 18,
+            width: 44, height: 44, cursor: "pointer", color: C.muted, fontSize: 18,
             display: "flex", alignItems: "center", justifyContent: "center"
           }}>
           ←
@@ -207,17 +214,19 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
             ))}
           </div>
           <p style={{ color: C.muted, fontSize: 11, margin: "5px 0 0" }}>
-            Card {currentIndex + 1} of {sessionQueue.length}
+            Card {currentIndex + 1} of {sessionQueue.length} · progress saves automatically
           </p>
         </div>
 
         {/* Commute Auto-Play Toggle */}
         {energyMode === "low" && (
           <button onClick={() => setAutoPlay(p => !p)}
+            aria-label={autoPlay ? "Disable auto-play" : "Enable auto-play for hands-free listening"}
             style={{
               background: autoPlay ? C.teal : C.card, border: `1px solid ${autoPlay ? C.teal : C.border}`,
               borderRadius: 8, padding: "4px 10px", color: autoPlay ? "#000" : C.muted,
-              fontSize: 10, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap"
+              fontSize: 10, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+              minHeight: 44, display: "flex", alignItems: "center"
             }}>
             {autoPlay ? "◼ Auto ON" : "▶ Auto-Play"}
           </button>
@@ -227,16 +236,18 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
         {energyMode === "focus" && (
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setShowCalculator(!showCalculator)}
+              aria-label={showCalculator ? "Hide calculator" : "Show calculator"}
               style={{
-                width: 32, height: 32, borderRadius: 8, background: showCalculator ? C.accent : C.card,
+                width: 44, height: 44, borderRadius: 8, background: showCalculator ? C.accent : C.card,
                 border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center",
                 color: showCalculator ? "#000" : C.muted, cursor: "pointer"
               }}>
               <Calculator size={15} />
             </button>
             <button onClick={() => setShowScratchpad(!showScratchpad)}
+              aria-label={showScratchpad ? "Hide working notes" : "Show working notes"}
               style={{
-                width: 32, height: 32, borderRadius: 8, background: showScratchpad ? C.blue : C.card,
+                width: 44, height: 44, borderRadius: 8, background: showScratchpad ? C.blue : C.card,
                 border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center",
                 color: showScratchpad ? "#000" : C.muted, cursor: "pointer"
               }}>
@@ -286,7 +297,7 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
             {/* Floating scratchpad textarea */}
             {showScratchpad && (
               <div style={{ background: C.cardAlt, border: `1.5px solid ${C.border}`, borderRadius: 10, padding: 10, marginBottom: 12 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Quick Scratchpad (Zero typing allowed in exam, use for notes)</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>Working Notes (CAIIB is pen-and-paper — practice writing calculations here)</span>
                 <textarea placeholder="Write scratch calculations here..." rows="3" value={scratchpad}
                   onChange={(e) => setScratchpad(e.target.value)}
                   style={{ width: "100%", background: "#050B14", border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 12, fontFamily: "monospace", padding: 8, marginTop: 4, outline: "none", resize: "none" }} />
@@ -484,27 +495,48 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
               <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", justifyContent: "center", textAlign: "center", padding: "10px 0" }}>
                 <div>
                   <Sparkles size={36} color={C.accent} style={{ margin: "0 auto 12px" }} />
-                  <h3 style={{ color: C.text, fontSize: 18, fontWeight: 700, margin: 0 }}>Assessment Complete</h3>
+                  <h3 style={{ color: C.text, fontSize: 18, fontWeight: 700, margin: 0 }}>How well did you recall this?</h3>
                   <p style={{ color: C.muted, fontSize: 13, marginTop: 4, padding: "0 20px" }}>
-                    How easily did you recall this regulatory concept? This calibrates your SuperMemo SM-2 spaced repetition queue.
+                    Your rating schedules when this card returns. Be honest — this is just for you.
                   </p>
+                </div>
+
+                {/* SM-2 explanation */}
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", textAlign: "left", maxWidth: 320, margin: "0 auto", width: "100%" }}>
+                  <p style={{ color: C.dim, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 6px" }}>
+                    How spaced repetition works
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                    {[
+                      { label: "Forgot", next: "Tomorrow", color: C.err },
+                      { label: "Struggled", next: "In 1 day", color: C.warn },
+                      { label: "Recalled", next: "In 3 days", color: C.blue },
+                      { label: "Mastered", next: "In weeks", color: C.ok },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: row.color, fontSize: 11, fontWeight: 600 }}>{row.label}</span>
+                        <span style={{ color: C.dim, fontSize: 10 }}>→ next review {row.next}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 280, margin: "0 auto", width: "100%" }}>
                   {[
-                    { r: 1, label: "Forgot (Review tomorrow)", color: C.err, bg: "#EF444420" },
-                    { r: 2, label: "Struggled (Short interval)", color: C.warn, bg: "#F59E0B20" },
-                    { r: 3, label: "Recalled (Normal interval)", color: C.blue, bg: "#3B82F620" },
-                    { r: 4, label: "Mastered (Long interval)", color: C.ok, bg: "#10B98120" }
+                    { r: 1, label: "Forgot", color: C.err, bg: "#EF444420" },
+                    { r: 2, label: "Struggled", color: C.warn, bg: "#F59E0B20" },
+                    { r: 3, label: "Recalled", color: C.blue, bg: "#3B82F620" },
+                    { r: 4, label: "Mastered", color: C.ok, bg: "#10B98120" }
                   ].map(opt => (
                     <button key={opt.r} onClick={() => handleRate(opt.r)}
+                      aria-label={`Rate as ${opt.label}`}
                       style={{
                         background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12,
-                        padding: "12px 16px", cursor: "pointer", color: C.text, fontSize: 12,
-                        fontWeight: 600, transition: "all 0.2s", textAlign: "center"
+                        padding: "14px 16px", cursor: "pointer", color: C.text, fontSize: 13,
+                        fontWeight: 600, transition: "all 0.15s", textAlign: "center", minHeight: 48
                       }}
-                      onPointerEnter={(e) => { e.currentTarget.style.borderColor = opt.color; e.currentTarget.style.background = opt.bg; }}
-                      onPointerLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card; }}>
+                      onPointerEnter={(e) => { e.currentTarget.style.borderColor = opt.color; e.currentTarget.style.background = opt.bg; e.currentTarget.style.color = opt.color; }}
+                      onPointerLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.text; }}>
                       {opt.label}
                     </button>
                   ))}
@@ -519,19 +551,22 @@ export default function StudyPanel({ sessionQueue, onSessionComplete, onCardAdva
       {currentSubStep < 4 && (
         <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 14, flexShrink: 0 }}>
           <button onClick={handleBackSubStep} disabled={currentSubStep === 0}
+            aria-label="Go to previous step"
             style={{
               background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
               padding: "10px 16px", color: currentSubStep === 0 ? C.dim : C.muted, fontSize: 12,
-              fontWeight: 600, cursor: currentSubStep === 0 ? "not-allowed" : "pointer"
+              fontWeight: 600, cursor: currentSubStep === 0 ? "not-allowed" : "pointer", minHeight: 44
             }}>
             Back
           </button>
           <button onClick={handleNextSubStep} disabled={currentSubStep === 3 && pickedOpt === null}
+            aria-label={currentSubStep === (energyMode === "low" ? 1 : 3) ? "Proceed to confidence rating" : "Go to next step"}
             style={{
               flex: 1, background: (currentSubStep === 3 && pickedOpt === null) ? C.card : C.accent,
               border: "none", borderRadius: 10, padding: "10px 16px",
               color: (currentSubStep === 3 && pickedOpt === null) ? C.dim : "#000",
-              fontSize: 12, fontWeight: 700, cursor: (currentSubStep === 3 && pickedOpt === null) ? "not-allowed" : "pointer"
+              fontSize: 12, fontWeight: 700, cursor: (currentSubStep === 3 && pickedOpt === null) ? "not-allowed" : "pointer",
+              minHeight: 44
             }}>
             {currentSubStep === (energyMode === "low" ? 1 : 3) ? "Rate Confidence →" : "Next →"}
           </button>

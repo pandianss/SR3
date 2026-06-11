@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
+﻿import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import {
   BookOpen, Brain, Zap, Clock, TrendingUp, Home,
   BarChart2, FlaskConical, Play, AlertTriangle,
@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 import { SUBJECTS, ELECTIVES, MODULES, TOPICS, FORMULAS, RBI_CIRCULARS } from "./data/contentGraph";
-import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint, computeStreakAndXP } from "./utils/spacedRepetition";
+import { getAllCardStates, seedMockSpacedRepetitionData, getMemoryStrengthStats, getRevisionQueue, saveSessionCheckpoint, loadSessionCheckpoint, clearSessionCheckpoint, computeStreakAndXP } from "./utils/spacedRepetition";
 import { calculatePassProbability } from "./utils/aiOrchestrator";
 import { C, font } from "./theme";
 import { checkServerApiStatus } from "./utils/keyStore";
@@ -33,6 +33,38 @@ import PassOptimizer from "./components/PassOptimizer";
 import Circulars from "./components/Circulars";
 const PracticeQuiz = lazy(() => import("./components/PracticeQuiz"));
 
+// ── Server-side card-usage helpers ────────────────────────────────────────────
+// The free-tier daily card limit is enforced server-side (users/{uid}/usage/daily
+// via Firebase Admin SDK, write-protected from clients by Firestore rules).
+// These helpers call the /api/usage/* endpoints; failures fall back gracefully
+// to the local count so a transient server error never blocks a study session.
+const API_BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '';
+
+async function getServerCardCount(user) {
+  try {
+    const token = await user?.getIdToken?.();
+    const res   = await fetch(`${API_BASE}/api/usage/card-count`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal:  AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return null;
+    return await res.json(); // { count, limitReached }
+  } catch { return null; }
+}
+
+async function recordServerCard(user) {
+  try {
+    const token = await user?.getIdToken?.();
+    const res   = await fetch(`${API_BASE}/api/usage/record-card`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      signal:  AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return null;
+    return await res.json(); // { count, limitReached }
+  } catch { return null; }
+}
+
 export default function App() {
   // ── Auth state ──────────────────────────────────────────────────────────────
   // null = not yet resolved, false = signed out, object = Firebase user
@@ -47,10 +79,8 @@ export default function App() {
   const [sessionQueue, setSessionQueue] = useState([]);
   const [energyMode, setEnergyMode] = useState("low");
 
-  // Offline sync indicator states
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState("Just now");
-  const [dbSize, setDbSize] = useState("14 KB");
+  // Offline sync indicator — passively updated on real Firestore writes
+  const [lastSyncTime, setLastSyncTime] = useState(null);
 
   // Settings drawer
   const [showSettings, setShowSettings] = useState(false);
@@ -98,6 +128,13 @@ export default function App() {
   // Subscription
   const [isPremium, setIsPremium] = useState(false);
   const [paywallTrigger, setPaywallTrigger] = useState(null); // null = closed
+
+  // Session preview modal (shown before launching StudyPanel)
+  const [sessionPreview, setSessionPreview] = useState(null); // { queue, mode } | null
+
+  // Custom reset confirmation modal
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
   const [dailyCardCount, setDailyCardCount] = useState(() => {
     const saved = localStorage.getItem("caiib_daily_cards");
     if (!saved) return 0;
@@ -133,8 +170,20 @@ export default function App() {
           getReferralStats(uid, profile.referralCode).then(setReferralStats);
         }
 
-        // Load subscription status
-        loadSubscriptionStatus(uid).then(s => setIsPremium(s.isPremium));
+        // Load subscription status, then sync the server-authoritative card count
+        // for free users so localStorage can't be cleared to bypass the daily limit.
+        loadSubscriptionStatus(uid).then(s => {
+          setIsPremium(s.isPremium);
+          if (!s.isPremium && user) {
+            getServerCardCount(user).then(data => {
+              if (data?.count !== undefined) {
+                setDailyCardCount(data.count);
+                localStorage.setItem("caiib_daily_cards",
+                  JSON.stringify({ date: new Date().toDateString(), count: data.count }));
+              }
+            });
+          }
+        });
 
         // Social: load partners and check for unread nudges
         getStudyPartners(profile).then(setPartners);
@@ -210,12 +259,23 @@ export default function App() {
   };
 
   const handleStartStudySession = (queue, mode = "low", startIndex = 0) => {
+    // Gate free users at session start, not mid-session.
+    if (!isPremium && dailyCardCount >= FREE_DAILY_CARD_LIMIT) {
+      setPaywallTrigger("card_limit");
+      return;
+    }
+    // Show preview modal; actual launch happens when user confirms.
+    setSessionPreview({ queue, mode, startIndex });
+  };
+
+  const handleLaunchConfirmed = ({ queue, mode, startIndex = 0 }) => {
+    setSessionPreview(null);
     sessionXPRef.current = 0;
     setSessionQueue(queue);
     setEnergyMode(mode);
     setTab("study_session");
     saveSessionCheckpoint({ subjectId: activeSubject, energyMode: mode, queueIds: queue.map(l => l.id), currentIndex: startIndex });
-    setCheckpoint(null); // consumed
+    setCheckpoint(null);
   };
 
   const handleLaunchTopicLesson = (topicId) => {
@@ -238,28 +298,28 @@ export default function App() {
     }
   };
 
-  const handleTriggerSync = () => {
-    setIsSyncing(true);
-    setTimeout(() => {
-      setIsSyncing(false);
-      const now = new Date();
-      setLastSyncTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`);
-      const len = JSON.stringify(localStorage).length;
-      setDbSize(`${(len / 1024).toFixed(1)} KB`);
-    }, 800);
+  const handleStudyNow = () => {
+    if (!isPremium && dailyCardCount >= FREE_DAILY_CARD_LIMIT) {
+      setPaywallTrigger("card_limit");
+      return;
+    }
+
+    const subjectLessons = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
+    const { dueLessons } = getRevisionQueue(subjectLessons, []);
+    const queue = dueLessons.length > 0 ? dueLessons : subjectLessons;
+    handleStartStudySession(queue.length > 0 ? queue : MICRO_LESSONS, energyMode);
   };
 
   const handleResetApp = () => {
-    if (confirm("Reset onboarding and all progress states?")) {
-      localStorage.clear();
-      setIsOnboarded(false);
-      setUserProfile(null);
-      setTab("home");
-      setApiStatus("disconnected");
-      setSessionQueue([]);
-      setEnergyMode("low");
-      setShowSettings(false);
-    }
+    localStorage.clear();
+    setIsOnboarded(false);
+    setUserProfile(null);
+    setTab("home");
+    setApiStatus("disconnected");
+    setSessionQueue([]);
+    setEnergyMode("low");
+    setShowSettings(false);
+    setShowResetConfirm(false);
   };
 
   const passStats = useMemo(() => calculatePassProbability(userProfile, 0), [userProfile]);
@@ -334,7 +394,7 @@ export default function App() {
                 <span style={{ color: C.dim, fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>{SERIES.name}</span>
                 <span style={{ color: C.accent, fontWeight: 800, fontSize: 13, letterSpacing: "0.04em" }}>{APP.exam}</span>
               </div>
-              <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Explore" : tab === "practice" ? "Practice" : tab === "revision" ? "Inbox" : tab === "strategy" ? "Strategy" : "Circulars"}</span>
+                <span style={{ color: C.muted, fontSize: 12, fontWeight: 500 }}>· {tab === "home" ? "Dashboard" : tab === "study" ? "Study" : tab === "practice" ? "Practice" : tab === "revision" ? "Review" : tab === "strategy" ? "Plan" : "Circulars"}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {/* Streak + career rank */}
@@ -348,7 +408,8 @@ export default function App() {
               )}
               {/* Settings */}
               <button onClick={() => setShowSettings(true)}
-                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                aria-label="Open settings"
+                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <Settings size={15} color={C.muted} />
               </button>
             </div>
@@ -359,7 +420,7 @@ export default function App() {
         {showSettings && (
           <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
             {/* Backdrop */}
-            <div onClick={() => setShowSettings(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)" }} />
+            <div onClick={() => { setShowSettings(false); setShowResetConfirm(false); }} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)" }} />
             <div style={{
               position: "relative", width: "100%", maxWidth: 480,
               background: C.surf, borderRadius: "20px 20px 0 0",
@@ -368,7 +429,9 @@ export default function App() {
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ color: C.text, fontWeight: 700, fontSize: 16 }}>Settings</span>
-                <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}>
+                <button onClick={() => { setShowSettings(false); setShowResetConfirm(false); }}
+                  aria-label="Close settings"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <X size={20} />
                 </button>
               </div>
@@ -393,10 +456,14 @@ export default function App() {
                 <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
                   <User size={16} color={C.dim} />
                   <span style={{ color: C.muted, fontSize: 12, flex: 1 }}>Offline mode — progress stored locally only</span>
-                  <button onClick={() => setShowSettings(false)}
-                    style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700 }}>
-                    Sign in
-                  </button>
+                  {isConfigured ? (
+                    <button onClick={() => { setShowSettings(false); setFirebaseUser(false); }}
+                      style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700 }}>
+                      Sign in
+                    </button>
+                  ) : (
+                    <span style={{ color: C.dim, fontSize: 10, fontStyle: "italic" }}>Requires internet</span>
+                  )}
                 </div>
               )}
 
@@ -436,9 +503,15 @@ export default function App() {
                   </span>
                 </div>
 
-                <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>
-                  The API key lives exclusively in the server .env file — it is never sent to the browser. Start the server with <code style={{ color: C.accent, fontSize: 10 }}>npm run server</code> to enable AI case studies, coaching, and strategic advice.
-                </p>
+                {import.meta.env.DEV ? (
+                  <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>
+                    The API key lives exclusively in the server .env file — it is never sent to the browser. Start the server with <code style={{ color: C.accent, fontSize: 10 }}>npm run server</code> to enable AI case studies, coaching, and strategic advice.
+                  </p>
+                ) : (
+                  <p style={{ color: C.dim, fontSize: 11, margin: 0 }}>
+                    AI features require a stable connection to our servers. If unavailable, all study content remains accessible without AI.
+                  </p>
+                )}
 
                 <button
                   onClick={() => { setApiStatus("checking"); checkServerApiStatus().then(setApiStatus); }}
@@ -476,9 +549,9 @@ export default function App() {
 
                   {/* Share message */}
                   <button onClick={() => {
-                    const msg = `📚 I'm using CAIIB Prep for my exam — use my code ${userProfile.referralCode} to sign up! https://play.google.com/store/apps/details?id=com.superrecall.caiib`;
+                    const msg = `📚 I'm using SuperRecall - CAIIB for my exam — use my code ${userProfile.referralCode} to sign up! https://play.google.com/store/apps/details?id=com.superrecall.caiib`;
                     if (navigator.share) {
-                      navigator.share({ title: "CAIIB Prep", text: msg });
+                      navigator.share({ title: "SuperRecall - CAIIB", text: msg });
                     } else {
                       navigator.clipboard.writeText(msg);
                     }
@@ -508,17 +581,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* Sync & DB info */}
+              {/* Sync status — passive, updated on real writes */}
               <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <RefreshCw size={14} color={C.teal} style={{ flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, margin: 0 }}>Local DB · {dbSize}</p>
-                  <p style={{ color: C.dim, fontSize: 10, margin: "2px 0 0" }}>Last synced: {lastSyncTime}</p>
+                  <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, margin: 0 }}>Progress sync</p>
+                  <p style={{ color: C.dim, fontSize: 10, margin: "2px 0 0" }}>
+                    {lastSyncTime ? `Last synced: ${lastSyncTime}` : firebaseUser ? "Synced automatically after each card" : "Stored locally (sign in to sync)"}
+                  </p>
                 </div>
-                <button onClick={handleTriggerSync} disabled={isSyncing}
-                  style={{ background: isSyncing ? C.card : `${C.teal}20`, border: `1px solid ${C.teal}44`, borderRadius: 8, padding: "6px 12px", color: C.teal, fontSize: 11, fontWeight: 700, cursor: isSyncing ? "default" : "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-                  <RefreshCw size={12} className={isSyncing ? "spin-animate" : ""} color={C.teal} />
-                  {isSyncing ? "Syncing…" : "Sync now"}
-                </button>
               </div>
 
               {/* Legal */}
@@ -532,13 +603,32 @@ export default function App() {
               </div>
 
               {/* Reset */}
-              <button onClick={handleResetApp}
-                style={{
-                  background: `${C.err}18`, border: `1.5px solid ${C.err}44`, color: C.err,
-                  borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700
-                }}>
-                Reset All Progress & Onboarding
-              </button>
+              {!showResetConfirm ? (
+                <button onClick={() => setShowResetConfirm(true)}
+                  style={{
+                    background: `${C.err}18`, border: `1.5px solid ${C.err}44`, color: C.err,
+                    borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700
+                  }}>
+                  Reset All Progress & Onboarding
+                </button>
+              ) : (
+                <div style={{ background: `${C.err}12`, border: `1.5px solid ${C.err}44`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <p style={{ color: C.err, fontWeight: 700, fontSize: 13, margin: 0 }}>Are you sure?</p>
+                  <p style={{ color: C.muted, fontSize: 12, margin: 0, lineHeight: 1.4 }}>
+                    This permanently deletes all study progress, streaks, and card history. This cannot be undone.
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setShowResetConfirm(false)}
+                      style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 0", color: C.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                      Cancel
+                    </button>
+                    <button onClick={handleResetApp}
+                      style={{ flex: 1, background: C.err, border: "none", borderRadius: 8, padding: "10px 0", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                      Yes, Delete Everything
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -562,7 +652,7 @@ export default function App() {
         {/* ── Active Screen Area ── */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {!isOnboarded ? (
-            <Onboarding onComplete={handleOnboardingComplete} />
+            <Onboarding onComplete={handleOnboardingComplete} onBack={() => { signOutUser(); setFirebaseUser(null); }} />
           ) : (
             <>
               {/* HOME SCREEN */}
@@ -583,12 +673,12 @@ export default function App() {
 
                   {/* Free tier usage bar */}
                   {!isPremium && (
-                    <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Cards left today</span>
+                          <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>Free plan today</span>
                           <span style={{ color: dailyCardCount >= FREE_DAILY_CARD_LIMIT ? C.err : C.text, fontSize: 11, fontWeight: 700 }}>
-                            {Math.max(0, FREE_DAILY_CARD_LIMIT - dailyCardCount)} / {FREE_DAILY_CARD_LIMIT}
+                            {Math.max(0, FREE_DAILY_CARD_LIMIT - dailyCardCount)} cards left
                           </span>
                         </div>
                         <div style={{ height: 4, background: C.border, borderRadius: 99 }}>
@@ -597,7 +687,7 @@ export default function App() {
                       </div>
                       <button onClick={() => setPaywallTrigger("generic")}
                         style={{ background: C.accent, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#000", fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap" }}>
-                        👑 ₹349
+                        Upgrade
                       </button>
                     </div>
                   )}
@@ -641,9 +731,30 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Primary action */}
+                  <div style={{
+                    background: `${C.accent}12`, border: `1.5px solid ${C.accent}44`,
+                    borderRadius: 16, padding: 16, marginBottom: 18,
+                    display: "flex", alignItems: "center", gap: 14
+                  }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: `${C.accent}22`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Play size={18} color={C.accent} fill={C.accent} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: C.text, fontSize: 16, fontWeight: 800, margin: 0 }}>Study Now</p>
+                      <p style={{ color: C.muted, fontSize: 11, margin: "3px 0 0", lineHeight: 1.4 }}>
+                        {SUBJECTS.concat(ELECTIVES).find(s => s.id === activeSubject)?.label || activeSubject} · {energyMode === "focus" ? "Deep Focus" : energyMode === "rapid" ? "Rapid Revision" : "Low Energy"}
+                      </p>
+                    </div>
+                    <button onClick={handleStudyNow}
+                      style={{ background: C.accent, border: "none", borderRadius: 12, padding: "12px 16px", color: "#000", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      Start
+                    </button>
+                  </div>
+
                   {/* Subject Picker */}
                   <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-                    Study Subject
+                    Subject
                   </p>
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 10, flexShrink: 0, marginBottom: 16 }}>
                     {SUBJECTS.concat(ELECTIVES).map(s => {
@@ -667,13 +778,13 @@ export default function App() {
 
                   {/* Study Modes Panel */}
                   <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-                    Select Study Mode
+                    Mode
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
                     {[
-                      { id: "low", Icon: Battery, label: "Low Energy Mode", sub: "Audio cards · One-handed swipe review", color: C.teal, bg: "#071E1C", mins: "5–10 min" },
-                      { id: "focus", Icon: Brain, label: "Deep Focus Mode", sub: "Numerical scenarios · Solved cases · Calculator", color: C.blue, bg: "#081830", mins: "20–40 min" },
-                      { id: "rapid", Icon: Zap, label: "Rapid Revision Mode", sub: "Formula drills · Weak memory queue", color: C.accent, bg: "#1E1505", mins: "10–15 min" }
+                      { id: "low", Icon: Battery, label: "Low Energy", sub: "Audio cards · One-handed review", color: C.teal, bg: "#071E1C", mins: "5–10 min" },
+                      { id: "focus", Icon: Brain, label: "Deep Focus", sub: "Numericals · Cases · Calculator", color: C.blue, bg: "#081830", mins: "20–40 min" },
+                      { id: "rapid", Icon: Zap, label: "Rapid Revision", sub: "Formula drills · Weak-memory queue", color: C.accent, bg: "#1E1505", mins: "10–15 min" }
                     ].map(m => {
                       const active = energyMode === m.id;
                       const locked = !canUseMode(m.id, isPremium);
@@ -715,25 +826,30 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Continue Study Block — reflects active subject */}
+                  {/* Continue Study Block — shows highest-priority due card for active subject */}
                   {(() => {
                     const subjectLessons = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
-                    const nextLesson = subjectLessons[0];
+                    const { dueLessons } = getRevisionQueue(subjectLessons, []);
+                    const nextLesson = dueLessons[0] || subjectLessons[0];
+                    const isDue = dueLessons.length > 0;
                     const subjectMeta = SUBJECTS.concat(ELECTIVES).find(s => s.id === activeSubject);
                     const firstModule = (MODULES[activeSubject] || [])[0];
                     if (!nextLesson) return null;
                     return (
-                      <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 14, marginBottom: 20 }}>
+                      <div style={{ background: C.card, border: `1.5px solid ${isDue ? C.accent : C.border}`, borderRadius: 14, padding: 14, marginBottom: 20 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                           <div style={{ flex: 1, overflow: "hidden", marginRight: 12 }}>
-                            <span style={{ color: C.muted, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>UP NEXT · {subjectMeta?.label || activeSubject}</span>
+                            <span style={{ color: isDue ? C.accent : C.muted, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>
+                              {isDue ? `⚡ DUE NOW · ${subjectMeta?.label || activeSubject}` : `UP NEXT · ${subjectMeta?.label || activeSubject}`}
+                            </span>
                             <h4 style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: "2px 0", textOverflow: "ellipsis", whiteSpace: "nowrap", overflow: "hidden" }}>{nextLesson.title}</h4>
                             <span style={{ fontSize: 9, background: `${subjectMeta?.color || C.blue}20`, color: subjectMeta?.color || C.blue, padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>
                               {activeSubject} · {firstModule?.name?.replace(/Module [A-Z]: /, "") || "Module A"}
                             </span>
                           </div>
                           <button onClick={() => handleLaunchTopicLesson(nextLesson.topicId)}
-                            style={{ background: C.accent, border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            aria-label={`Study ${nextLesson.title}`}
+                            style={{ background: C.accent, border: "none", borderRadius: "50%", width: 44, height: 44, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             <Play size={16} color="#000" fill="#000" style={{ marginLeft: 2 }} />
                           </button>
                         </div>
@@ -763,20 +879,46 @@ export default function App() {
                   </div>
 
                   {/* Pass Probability Snapshot */}
-                  <div onClick={() => setTab("strategy")}
-                    style={{
-                      background: `${C.accent}12`, border: `1.5px solid ${C.accent}44`, borderRadius: 14,
-                      padding: 14, marginBottom: 24, cursor: "pointer", display: "flex", alignItems: "center", gap: 12
-                    }}>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ color: C.accent, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Pass Probability Indicator</p>
-                      <p style={{ color: C.text, fontSize: 20, fontWeight: 800, margin: "2px 0" }}>
-                        {passStats.probability}% <span style={{ color: passStats.statusColor, fontSize: 11, fontWeight: 600 }}>{passStats.statusText}</span>
-                      </p>
-                      <p style={{ color: C.muted, fontSize: 11, margin: 0 }}>Projected Aggregate {passStats.aggregate}/100 · Open Optimizer →</p>
-                    </div>
-                    <ChevronRight size={18} color={C.accent} />
-                  </div>
+                  {/* Pass Probability — hidden until user has studied enough cards to produce meaningful data */}
+                  {(() => {
+                    const memStats = getMemoryStrengthStats(MICRO_LESSONS.length, FORMULAS.length);
+                    const totalReviewed = memStats.mastered + memStats.reviewing + memStats.forgotten;
+                    if (totalReviewed < 10) {
+                      return (
+                        <div onClick={() => setTab("strategy")}
+                          style={{
+                            background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14,
+                            padding: 14, marginBottom: 24, cursor: "pointer", display: "flex", alignItems: "center", gap: 12
+                          }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ color: C.muted, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Pass Probability</p>
+                            <p style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: "4px 0 2px" }}>Study 10 cards to unlock →</p>
+                            <div style={{ height: 4, background: C.border, borderRadius: 99, marginTop: 4 }}>
+                              <div style={{ height: 4, borderRadius: 99, background: C.accent, width: `${(totalReviewed / 10) * 100}%`, transition: "width 0.4s" }} />
+                            </div>
+                            <p style={{ color: C.dim, fontSize: 10, margin: "4px 0 0" }}>{totalReviewed} / 10 cards reviewed</p>
+                          </div>
+                          <ChevronRight size={18} color={C.dim} />
+                        </div>
+                      );
+                    }
+                    return (
+                      <div onClick={() => setTab("strategy")}
+                        style={{
+                          background: `${C.accent}12`, border: `1.5px solid ${C.accent}44`, borderRadius: 14,
+                          padding: 14, marginBottom: 24, cursor: "pointer", display: "flex", alignItems: "center", gap: 12
+                        }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ color: C.accent, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", margin: 0 }}>Pass Probability Indicator</p>
+                          <p style={{ color: C.text, fontSize: 20, fontWeight: 800, margin: "2px 0" }}>
+                            {passStats.probability}% <span style={{ color: passStats.statusColor, fontSize: 11, fontWeight: 600 }}>{passStats.statusText}</span>
+                          </p>
+                          <p style={{ color: C.muted, fontSize: 11, margin: 0 }}>Projected Aggregate {passStats.aggregate}/100 · Open Optimizer →</p>
+                        </div>
+                        <ChevronRight size={18} color={C.accent} />
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -847,7 +989,7 @@ export default function App() {
                     <div style={{ marginTop: 10, borderTop: `1.5px solid ${C.border}`, paddingTop: 14 }}>
                       <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", marginBottom: 10 }}>Formula Revision Index</p>
                       <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-                        {["All", "BFM", "ABM", "ABFM"].map(f => (
+                        {["All", "ABM", "BFM", "ABFM", "BRBL"].map(f => (
                           <button key={f} onClick={() => setSelectedFormulaTab(f)}
                             style={{
                               background: selectedFormulaTab === f ? C.accent : C.card,
@@ -885,7 +1027,7 @@ export default function App() {
                   microLessons={MICRO_LESSONS}
                   onStartRevision={(lessons, formulas) => {
                     const combined = [...lessons, ...formulas];
-                    handleStartStudySession(combined, "rapid");
+                    handleStartStudySession(combined, energyMode);
                   }} />
               )}
 
@@ -928,23 +1070,29 @@ export default function App() {
                       <p style={{ color: C.muted, fontSize: 10, margin: "2px 0 0", fontWeight: 600 }}>RANK</p>
                     </div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 280 }}>
-                    <button onClick={() => { setTab("home"); }}
-                      style={{ background: C.accent, border: "none", borderRadius: 12, padding: "13px 20px", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                      Back to Dashboard
-                    </button>
-                    <button onClick={() => {
-                      const list = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
-                      handleStartStudySession(list.length > 0 ? list : MICRO_LESSONS, energyMode);
-                    }}
-                      style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 12, padding: "13px 20px", color: C.text, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                      Study {activeSubject} Again →
-                    </button>
-                    <button onClick={() => setTab("revision")}
-                      style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", padding: "4px 0" }}>
-                      Open Revision Inbox
-                    </button>
-                  </div>
+                  {(() => {
+                    const subjectLessons = MICRO_LESSONS.filter(l => l.subjectId === activeSubject);
+                    const { dueLessons, dueFormulas } = getRevisionQueue(subjectLessons, FORMULAS.filter(f => f.sub === activeSubject));
+                    const dueCount = dueLessons.length + dueFormulas.length;
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 280 }}>
+                        {dueCount > 0 && (
+                          <button onClick={() => handleStartStudySession([...dueLessons, ...dueFormulas], energyMode)}
+                            style={{ background: C.accent, border: "none", borderRadius: 12, padding: "13px 20px", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                            Review {dueCount} Due Card{dueCount !== 1 ? "s" : ""} →
+                          </button>
+                        )}
+                        <button onClick={() => { setTab("home"); }}
+                          style={{ background: dueCount > 0 ? C.card : C.accent, border: dueCount > 0 ? `1.5px solid ${C.border}` : "none", borderRadius: 12, padding: "13px 20px", color: dueCount > 0 ? C.text : "#000", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                          Back to Dashboard
+                        </button>
+                        <button onClick={() => setTab("revision")}
+                          style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", padding: "4px 0" }}>
+                          Open Review
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -980,12 +1128,20 @@ export default function App() {
                     userProfileRef.current = updated;
                     setUserProfile(updated);
                     syncWrite(uid, "profile", "caiib_user_profile", updated);
+                    const now = new Date();
+                    setLastSyncTime(`${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`);
 
                     saveSessionCheckpoint({ subjectId: activeSubject, energyMode, queueIds: sessionQueue.map(l => l.id), currentIndex: idx });
                     if (!isPremium) {
+                      // Optimistic local update for immediate UI feedback
                       const newCount = dailyCardCount + 1;
                       setDailyCardCount(newCount);
                       localStorage.setItem("caiib_daily_cards", JSON.stringify({ date: new Date().toDateString(), count: newCount }));
+                      // Mirror to server (fire-and-forget); server count is
+                      // authoritative and will override on next session start.
+                      recordServerCard(firebaseUser).then(data => {
+                        if (data?.count !== undefined) setDailyCardCount(data.count);
+                      });
                     }
                   }}
                   onSessionComplete={() => {
@@ -1016,23 +1172,25 @@ export default function App() {
             flexShrink: 0, zIndex: 20, position: "sticky", bottom: 0
           }}>
             {[
-              { id: "home",     Icon: Home,     label: "Home" },
-              { id: "study",    Icon: BookOpen,  label: "Explore" },
-              { id: "practice", Icon: PenLine,   label: "Practice" },
-              { id: "revision", Icon: RotateCcw, label: "Inbox" },
-              { id: "strategy", Icon: BarChart2, label: "Strategy" }
+              { id: "home",      Icon: Home,      label: "Home" },
+              { id: "study",     Icon: BookOpen,   label: "Study" },
+              { id: "practice",  Icon: PenLine,    label: "Practice" },
+              { id: "revision",  Icon: RotateCcw,  label: "Review" },
+              { id: "circulars", Icon: FileText,   label: "Circulars" },
+              { id: "strategy",  Icon: BarChart2,  label: "Plan" }
             ].map(it => {
               const active = tab === it.id;
               return (
                 <button key={it.id} onClick={() => setTab(it.id)}
-                  style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 0 }}>
+                  aria-label={it.label}
+                  style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: 0, minHeight: 44 }}>
                   <div style={{
-                    width: 40, height: 28, display: "flex", alignItems: "center", justifyContent: "center",
-                    borderRadius: 14, background: active ? `${C.accent}22` : "transparent", transition: "background 0.2s"
+                    width: 36, height: 26, display: "flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: 12, background: active ? `${C.accent}22` : "transparent", transition: "background 0.2s"
                   }}>
-                    <it.Icon size={18} color={active ? C.accent : C.dim} strokeWidth={active ? 2.5 : 1.8} />
+                    <it.Icon size={16} color={active ? C.accent : C.dim} strokeWidth={active ? 2.5 : 1.8} />
                   </div>
-                  <span style={{ fontSize: 9, fontWeight: active ? 700 : 500, color: active ? C.accent : C.dim, letterSpacing: "0.02em" }}>
+                  <span style={{ fontSize: 8, fontWeight: active ? 700 : 500, color: active ? C.accent : C.dim, letterSpacing: "0.02em" }}>
                     {it.label}
                   </span>
                 </button>
@@ -1041,6 +1199,63 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* Session preview modal — confirms queue size and mode before launching */}
+      {sessionPreview && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+          <div onClick={() => setSessionPreview(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.72)" }} />
+          <div style={{
+            position: "relative", width: "100%", maxWidth: 480,
+            background: C.surf, borderRadius: "20px 20px 0 0",
+            border: `1px solid ${C.border}`, borderBottom: "none",
+            padding: "24px 20px 36px", zIndex: 1, display: "flex", flexDirection: "column", gap: 16
+          }}>
+            {(() => {
+              const modeInfo = {
+                low:   { label: "Low Energy",      mins: "5–10 min",  color: C.teal },
+                focus: { label: "Deep Focus",       mins: "20–40 min", color: C.blue },
+                rapid: { label: "Rapid Revision",   mins: "10–15 min", color: C.accent },
+              }[sessionPreview.mode] || { label: "Study", mins: "–", color: C.accent };
+              const cardCount = sessionPreview.queue.length;
+              const estMins = Math.ceil(cardCount * (sessionPreview.mode === "focus" ? 3 : sessionPreview.mode === "rapid" ? 1.5 : 2));
+              return (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <p style={{ color: C.dim, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 4px" }}>Starting session</p>
+                      <h3 style={{ color: C.text, fontSize: 18, fontWeight: 800, margin: 0 }}>{modeInfo.label}</h3>
+                    </div>
+                    <button onClick={() => setSessionPreview(null)} aria-label="Cancel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 36, height: 36, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <X size={15} color={C.muted} />
+                    </button>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    {[
+                      { label: "Cards", value: cardCount },
+                      { label: "Est. time", value: `~${estMins} min` },
+                      { label: "Mode", value: modeInfo.label },
+                    ].map(s => (
+                      <div key={s.label} style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+                        <p style={{ color: modeInfo.color, fontWeight: 800, fontSize: 16, margin: 0 }}>{s.value}</p>
+                        <p style={{ color: C.dim, fontSize: 9, margin: "2px 0 0", textTransform: "uppercase", fontWeight: 600 }}>{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {!isPremium && (
+                    <p style={{ color: C.dim, fontSize: 11, margin: 0, textAlign: "center" }}>
+                      {FREE_DAILY_CARD_LIMIT - dailyCardCount} free card{FREE_DAILY_CARD_LIMIT - dailyCardCount !== 1 ? "s" : ""} remaining today
+                    </p>
+                  )}
+                  <button onClick={() => handleLaunchConfirmed(sessionPreview)}
+                    style={{ background: modeInfo.color, border: "none", borderRadius: 14, padding: "15px 20px", color: "#000", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                    Start Session →
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Paywall modal */}
       {paywallTrigger && (

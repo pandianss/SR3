@@ -4,6 +4,18 @@
 
 import { SUBJECTS, FORMULAS } from "../data/contentGraph";
 import { getAllCardStates } from "./spacedRepetition";
+import { auth } from "./firebase";
+
+// Attach Firebase ID token so the server can verify the caller once
+// Firebase Admin SDK is configured (gracefully degrades without it).
+async function authHeaders() {
+  try {
+    const token = await auth?.currentUser?.getIdToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Procedural Numerical Problem Generator
@@ -281,7 +293,7 @@ export async function generateAICaseStudy(topicName) {
   try {
     const res = await fetch(`${API_BASE}/api/gemini/case-study`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body:    JSON.stringify({ topicName }),
       signal:  AbortSignal.timeout(25_000)
     });
@@ -298,7 +310,7 @@ export async function explainMistake(question, optionSelected, correctOption, wh
     // Centralized Gemini requests are now proxied securely through our backend server.
     const res = await fetch(`${API_BASE}/api/gemini/explain`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body:    JSON.stringify({ question, optionSelected, correctOption, whyDetail }),
       signal:  AbortSignal.timeout(20_000)
     });
@@ -328,7 +340,7 @@ export async function generateStudySchedule(projectedScores, elective) {
   try {
     const res = await fetch(`${API_BASE}/api/gemini/schedule`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body:    JSON.stringify({ projectedScores, elective }),
       signal:  AbortSignal.timeout(20_000)
     });

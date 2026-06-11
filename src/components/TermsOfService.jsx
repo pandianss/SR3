@@ -38,7 +38,7 @@ export default function TermsOfService({ onBack }) {
           </p>
 
           <Section title="1. The Service">
-            <p>CAIIB Prep is an exam preparation platform for banking professionals appearing in the Certified Associate of the Indian Institute of Bankers (CAIIB) examination. The App provides study content, spaced-repetition tools, AI-generated case studies, and RBI circular summaries for educational purposes.</p>
+            <p>SuperRecall - CAIIB is an exam preparation platform for banking professionals appearing in the Certified Associate of the Indian Institute of Bankers (CAIIB) examination. The App provides study content, spaced-repetition tools, AI-generated case studies, and RBI circular summaries for educational purposes.</p>
             <p style={{ marginTop: 8 }}>
               <strong style={{ color: C.text }}>Disclaimer:</strong> The App is an independent study aid. It is not affiliated with, endorsed by, or officially connected to IIBF (Indian Institute of Banking and Finance). Exam patterns and syllabi may change; always verify with official IIBF sources.
             </p>
