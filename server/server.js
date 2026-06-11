@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { randomUUID } from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -6,11 +7,25 @@ import compression from 'compression';
 
 import { requireInternalToken } from './middleware/auth.js';
 import { globalLimiter } from './middleware/rateLimit.js';
-import geminiRouter from './routes/gemini.js';
+import geminiRouter    from './routes/gemini.js';
 import circularsRouter, { startBackgroundScraper } from './routes/circulars.js';
+import billingRouter, { handleBillingWebhook } from './routes/billing.js';
+import usageRouter     from './routes/usage.js';
+import { adminDb }     from './admin/firebase.js';
 
 const app  = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
+
+// ── Production guards ─────────────────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
+  console.error('[Server] FATAL: CORS_ORIGIN must be set in production. Exiting.');
+  process.exit(1);
+}
+
+// Trust the first hop reverse-proxy (nginx / Railway / Cloudflare) so that
+// express-rate-limit sees the real client IP from X-Forwarded-For rather than
+// treating all requests as coming from the proxy's single IP.
+app.set('trust proxy', 1);
 
 // ── Security & performance middleware ─────────────────────────────────────────
 app.use(helmet({
@@ -25,6 +40,16 @@ app.use(cors({
 // Hard-cap request bodies to prevent DoS via oversized payloads
 app.use(express.json({ limit: '10kb' }));
 
+// ── Request correlation IDs ───────────────────────────────────────────────────
+// Attach a short ID to each request so related log lines can be correlated.
+app.use((req, _res, next) => { req.id = randomUUID().slice(0, 8); next(); });
+
+// ── Pub/Sub billing webhook ───────────────────────────────────────────────────
+// Mounted BEFORE the global rate-limiter and internal-token guard because
+// Google Pub/Sub push subscriptions cannot inject custom headers.
+// Request authenticity is verified inside handleBillingWebhook via OIDC token.
+app.post('/api/billing/webhook', handleBillingWebhook);
+
 // ── Global rate limit applied to every /api/* route ───────────────────────────
 app.use('/api', globalLimiter);
 
@@ -34,10 +59,14 @@ app.use('/api', globalLimiter);
 app.use('/api', requireInternalToken);
 
 // ── Route modules ─────────────────────────────────────────────────────────────
-// server/routes/gemini.js   — LRU cache, in-flight dedup, per-endpoint rate limits
-// server/routes/circulars.js — background scraper, file cache, force-refresh
+// server/routes/gemini.js    — LRU cache, in-flight dedup, per-endpoint rate limits
+// server/routes/circulars.js — background scraper, file cache, circuit breaker
+// server/routes/billing.js   — /verify route (webhook is mounted above)
+// server/routes/usage.js     — server-side daily card-count enforcement
 app.use('/api/gemini',    geminiRouter);
 app.use('/api/circulars', circularsRouter);
+app.use('/api/billing',   billingRouter);
+app.use('/api/usage',     usageRouter);
 
 // ── Liveness probe (no auth, no rate limit) ───────────────────────────────────
 app.get('/health', (_req, res) =>
@@ -59,7 +88,9 @@ const server = app.listen(PORT, () => {
   console.log(`\n[Server] CAIIB backend running on http://localhost:${PORT}`);
   console.log(`[Server] Gemini API key : ${process.env.GEMINI_API_KEY ? '✓ configured' : '✗ missing — add GEMINI_API_KEY to .env'}`);
   console.log(`[Server] CORS origin    : ${process.env.CORS_ORIGIN ?? 'http://localhost:5173'}`);
-  console.log(`[Server] Auth token     : ${process.env.INTERNAL_TOKEN ? '✓ active' : '— disabled (dev mode)'}\n`);
+  console.log(`[Server] Auth token     : ${process.env.INTERNAL_TOKEN ? '✓ active' : '— disabled (dev mode)'}`);
+  console.log(`[Server] Admin SDK      : ${adminDb ? '✓ connected' : '✗ disabled — set FIREBASE_SERVICE_ACCOUNT_JSON'}`);
+  console.log(`[Server] Pub/Sub OIDC   : ${process.env.PUBSUB_SA_EMAIL ? '✓ configured' : '— skipped (set PUBSUB_SA_EMAIL + PUBSUB_AUDIENCE_URL for production)'}\n`);
 
   // Start the background RBI circular scraper (non-blocking fire-and-forget)
   startBackgroundScraper();
@@ -81,3 +112,15 @@ function shutdown(signal) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
+
+// ── Crash safeguards ──────────────────────────────────────────────────────────
+// Let the process exit on unhandled exceptions so the deployment platform
+// (Railway, PM2, systemd) can restart it automatically.
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught exception:', err.message, '\n', err.stack);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Server] Unhandled promise rejection:', reason);
+  process.exit(1);
+});

@@ -11,7 +11,10 @@ const router = Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 
-const CACHE_FILE         = join(__dirname, '../cache/circulars.json');
+// CACHE_DIR defaults to /tmp so it's writable on containerised deployments
+// (Railway, Render, Docker) where the source directory is read-only.
+// Override with CACHE_DIR=/path/to/writable/dir if you have a persistent volume.
+const CACHE_FILE         = join(process.env.CACHE_DIR ?? '/tmp', 'circulars.json');
 const RBI_URL            = 'https://rbi.org.in/Scripts/Notifications.aspx';
 const GEMINI_ENDPOINT    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 const REFRESH_INTERVAL   = 6 * 60 * 60 * 1000; // 6 hours in ms
@@ -34,9 +37,11 @@ const TOPIC_KEYWORD_MAP = [
 ];
 
 // ── In-memory state ─────────────────────────────────────────────────────────
-let memoryCache   = [];
-let lastScrapedAt = null;
-let isScrapingNow = false;
+let memoryCache        = [];
+let lastScrapedAt      = null;
+let isScrapingNow      = false;
+let consecutiveFailures = 0;                             // circuit-breaker counter
+const MAX_BACKOFF_MS   = 24 * 60 * 60 * 1000;           // 24 h ceiling
 
 // ── File-cache helpers ───────────────────────────────────────────────────────
 function loadFileCache() {
@@ -175,15 +180,18 @@ async function runPipeline() {
     }
 
     if (results.length > 0) {
-      memoryCache   = results;
-      lastScrapedAt = new Date();
+      memoryCache         = results;
+      lastScrapedAt       = new Date();
+      consecutiveFailures = 0; // reset circuit breaker on successful scrape
       saveFileCache(results);
       console.log(`[Circulars] Pipeline complete — ${results.length} circulars cached.`);
     } else {
       console.warn('[Circulars] Pipeline returned 0 results — retaining previous cache.');
+      consecutiveFailures = 0; // partial success (RBI reachable); don't back off
     }
   } catch (err) {
-    console.error('[Circulars] Pipeline error:', err.message);
+    consecutiveFailures++;
+    console.error(`[Circulars] Pipeline error (failure #${consecutiveFailures}):`, err.message);
   } finally {
     isScrapingNow = false;
   }
@@ -191,21 +199,37 @@ async function runPipeline() {
   return memoryCache;
 }
 
-// ── Background scheduler ─────────────────────────────────────────────────────
+// ── Background scheduler with circuit breaker ─────────────────────────────────
+// Uses recursive setTimeout + exponential backoff instead of setInterval so
+// that repeated failures (e.g. RBI site down) back off rather than hammering
+// the external endpoint every 6 hours regardless.
+//
+// Backoff schedule (base = 6 h):
+//   0 failures  → 6 h
+//   1 failure   → 6 h
+//   2 failures  → 12 h
+//   3 failures  → 24 h  (ceiling)
+//   …
+async function scrapeLoop() {
+  await runPipeline(); // errors are caught and counted inside runPipeline
+
+  const backoffMs = consecutiveFailures <= 1
+    ? REFRESH_INTERVAL
+    : Math.min(MAX_BACKOFF_MS, REFRESH_INTERVAL * Math.pow(2, consecutiveFailures - 1));
+
+  if (consecutiveFailures > 1) {
+    const mins = Math.round(backoffMs / 60_000);
+    console.log(`[Circulars] Circuit-breaker: ${consecutiveFailures} consecutive failure(s) — next attempt in ${mins} min.`);
+  }
+
+  setTimeout(scrapeLoop, backoffMs);
+}
+
 // Called once from server.js on startup — non-blocking (no top-level await).
 export function startBackgroundScraper() {
   loadFileCache(); // hydrate memory cache from persisted file immediately
-
-  // Initial scrape — fire and forget so server starts responding right away
-  runPipeline().catch(err => console.error('[Circulars] Initial scrape failed:', err.message));
-
-  // Recurring refresh every 6 hours
-  setInterval(
-    () => runPipeline().catch(err => console.error('[Circulars] Scheduled scrape failed:', err.message)),
-    REFRESH_INTERVAL
-  );
-
-  console.log('[Circulars] Background scraper initialised. Refresh interval: 6 hours.');
+  scrapeLoop();    // runs immediately, then self-schedules
+  console.log('[Circulars] Background scraper initialised. Base refresh interval: 6 hours.');
 }
 
 // ── Route: GET /api/circulars ─────────────────────────────────────────────────
@@ -213,10 +237,25 @@ router.get('/', circularsLimiter, async (req, res) => {
   const forceRefresh = req.query.refresh === 'true';
 
   if (forceRefresh) {
-    console.log('[Circulars] Force-refresh requested by client.');
-    await runPipeline();
+    // Guard: each force-refresh fires up to 20 Gemini classification calls.
+    // Require REFRESH_SECRET header when the env var is configured; in dev
+    // (no REFRESH_SECRET set) the check is skipped to allow easy testing.
+    const secret = process.env.REFRESH_SECRET;
+    if (secret && req.headers['x-refresh-secret'] !== secret) {
+      return res.status(403).json({ error: 'Force-refresh requires admin authorisation.' });
+    }
+
+    // Throttle: skip re-scrape if cache is less than 30 minutes old.
+    const cacheAgeMs  = lastScrapedAt ? Date.now() - lastScrapedAt.getTime() : Infinity;
+    const MIN_AGE_MS  = 30 * 60 * 1000;
+    if (cacheAgeMs < MIN_AGE_MS) {
+      console.log(`[Circulars] Force-refresh skipped — cache is only ${Math.round(cacheAgeMs / 60000)} min old.`);
+    } else {
+      console.log('[Circulars] Force-refresh authorised.');
+      await runPipeline();
+    }
   } else if (memoryCache.length === 0) {
-    // Cache cold on first hit before background scraper finishes — block briefly
+    // Cache cold on first hit before background scraper finishes — block briefly.
     console.log('[Circulars] Cache empty on first request — running synchronous scrape...');
     await runPipeline();
   }

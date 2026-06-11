@@ -4,10 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "start": "node server/server.js",
     "dev": "concurrently \"vite\" \"node server/server.js\"",
     "vite": "vite",
     "server": "node server/server.js",
     "build": "vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "scrape": "node scripts/rbi_scraper.js",
     "android": "npm run build && npx cap sync android && npx cap open android"
@@ -29,6 +31,8 @@
     "express": "^4.22.2",
     "express-rate-limit": "^7.3.1",
     "firebase": "^12.14.0",
+    "firebase-admin": "^12.7.0",
+    "google-auth-library": "^9.0.0",
     "helmet": "^7.1.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",

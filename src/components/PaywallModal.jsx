@@ -3,6 +3,7 @@ import { X, Zap, Brain, BookOpen, Sparkles, CheckCircle2, Crown, TrendingUp } fr
 import { C } from "../theme";
 import { APP, SERIES } from "../brand";
 import { PLANS, purchaseSubscription } from "../utils/subscription";
+import { auth } from "../utils/firebase";
 
 export default function PaywallModal({ onClose, trigger = "generic" }) {
   const [selectedPlan, setSelectedPlan] = useState("exam"); // 3-month is the hero
@@ -37,9 +38,16 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
   const handlePurchase = async () => {
     setLoading(true);
     setError("");
-    const plan = PLANS[selectedPlan];
-    const result = await purchaseSubscription(plan.productId);
-    if (!result.success && result.reason !== "web_fallback") {
+    const plan    = PLANS[selectedPlan];
+    const uid     = auth?.currentUser?.uid ?? null;
+    const result  = await purchaseSubscription(
+      plan.productId,
+      uid,
+      () => auth?.currentUser?.getIdToken()
+    );
+    if (result.success) {
+      onClose();
+    } else if (result.reason !== "web_fallback") {
       setError("Purchase failed. Please try again or contact support@superrecall.in");
     }
     setLoading(false);
@@ -62,7 +70,7 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
       }}>
 
         {/* Close */}
-        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 32, height: 32, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <button onClick={onClose} aria-label="Close" style={{ position: "absolute", top: 16, right: 16, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, width: 44, height: 44, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <X size={16} color={C.muted} />
         </button>
 
@@ -98,10 +106,10 @@ export default function PaywallModal({ onClose, trigger = "generic" }) {
                 {/* Badge */}
                 {plan.badge && (
                   <span style={{
-                    position: "absolute", top: -10,
+                    position: "absolute", top: -11,
                     background: plan.highlight ? C.accent : C.blue,
-                    color: "#000", fontSize: 8, fontWeight: 800,
-                    padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap"
+                    color: "#000", fontSize: 11, fontWeight: 800,
+                    padding: "3px 8px", borderRadius: 20, whiteSpace: "nowrap"
                   }}>{plan.badge}</span>
                 )}
                 <span style={{ color: active ? (plan.highlight ? C.accent : C.blue) : C.muted, fontWeight: 700, fontSize: 10 }}>{plan.label}</span>
