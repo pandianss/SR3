@@ -4,7 +4,8 @@
 import { db } from "./firebase";
 import {
   doc, getDoc, setDoc, collection,
-  addDoc, getDocs, deleteDoc, serverTimestamp
+  addDoc, getDocs, deleteDoc, serverTimestamp,
+  query, limit
 } from "firebase/firestore";
 
 async function resolvePartnerCode(code) {
@@ -58,14 +59,18 @@ export async function pairWithPartner(uid, partnerCode, currentProfile) {
   const existingIds = currentProfile.partnerIds || [];
   if (existingIds.includes(codeData.ownerUid)) return { error: "Already linked." };
 
-  const partnerProfile = await fetchPartnerProfile(codeData.ownerUid);
   const newPartnerIds = [...existingIds, codeData.ownerUid];
 
+  // Write the updated partnerIds FIRST so the Firestore security rule that
+  // gates partner-profile reads (uid in requester's partnerIds) is satisfied
+  // before fetchPartnerProfile attempts the cross-user read.
   await setDoc(
     doc(db, "users", uid, "profile", "data"),
     { partnerIds: newPartnerIds },
     { merge: true }
   );
+
+  const partnerProfile = await fetchPartnerProfile(codeData.ownerUid);
 
   return { ok: true, partnerProfile, newPartnerIds };
 }
@@ -94,7 +99,8 @@ export async function sendNudge(fromUid, partnerId) {
 export async function checkAndClearNudges(uid) {
   if (!db || !uid) return [];
   try {
-    const snap = await getDocs(collection(db, "users", uid, "nudges"));
+    // Limit to 50 docs to bound the read cost and prevent a flooding DoS.
+    const snap = await getDocs(query(collection(db, "users", uid, "nudges"), limit(50)));
     const unread = snap.docs.filter(d => !d.data().read);
     // Delete all fetched docs (read + unread) to keep the subcollection bounded.
     snap.docs.forEach(d => deleteDoc(d.ref).catch(() => {}));

@@ -3,28 +3,43 @@ rules_version = '2';
 // SuperRecall CAIIB — Firestore security rules
 // Deploy with:  firebase deploy --only firestore:rules
 //
-// Threat model addressed:
-//  - A signed-in user must not be able to grant themselves premium.
-//  - A signed-in user must not be able to fabricate referral counts or
-//    commission (payout) entries.
+// Threat model:
+//  - A signed-in user must not grant themselves premium.
+//  - A signed-in user must not fabricate XP, streak, or level values.
+//  - A signed-in user must not inject unexpected fields into their profile.
+//  - A signed-in user must not inflate referral counts or commission entries.
 //  - All other documents are denied by default.
 //
 // Revenue-critical writes (subscription entitlement, referral counters,
-// commission ledger) are reserved for the Firebase Admin SDK running on the
-// server / Play Billing webhook, which bypasses these rules.
+// commission ledger) are reserved for the Firebase Admin SDK on the server,
+// which bypasses these rules.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn()      { return request.auth != null; }
-    function isOwner(uid)    { return signedIn() && request.auth.uid == uid; }
+    function signedIn()   { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
 
     // ── User-owned study data ────────────────────────────────────────────────
-    // Profile is readable by any signed-in user (partners need name/xp/streak
-    // for the leaderboard & co-study panel); only the owner may write it.
+    // Profile reads are scoped to the owner OR a user who has already linked
+    // this profile as a study partner (i.e. uid appears in their own partnerIds).
+    // pairWithPartner() writes the partnership first, then reads the partner
+    // profile, so the rule is satisfied by the time the read fires.
+    //
+    // Write validation blocks:
+    //   • Attempts to inject isPremium / subscription flags
+    //   • Non-numeric xp / streak / level (prevents logic bypass via type coercion)
     match /users/{uid}/profile/{doc} {
-      allow read:  if signedIn();
-      allow write: if isOwner(uid);
+      allow read:  if isOwner(uid)
+        || (signedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid)/profile/data)
+          && uid in get(/databases/$(database)/documents/users/$(request.auth.uid)/profile/data).data.get('partnerIds', []));
+      allow write: if isOwner(uid)
+        && !("isPremium"    in request.resource.data)
+        && !("subscription" in request.resource.data)
+        && (!("xp"     in request.resource.data) || request.resource.data.xp     is number)
+        && (!("streak" in request.resource.data) || request.resource.data.streak is number)
+        && (!("level"  in request.resource.data) || request.resource.data.level  is number);
     }
 
     match /users/{uid}/cardStates/{doc}  { allow read, write: if isOwner(uid); }
@@ -33,10 +48,13 @@ service cloud.firestore {
 
     // ── Study-buddy nudges ───────────────────────────────────────────────────
     // Any signed-in user may CREATE a nudge addressed to {uid}, but must stamp
-    // their own uid as the sender. Only the recipient may read or delete.
+    // their own uid as the sender and may only include the three expected fields.
+    // Only the recipient may read or delete.
     match /users/{uid}/nudges/{nudgeId} {
       allow read, delete: if isOwner(uid);
-      allow create:       if signedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow create:       if signedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['fromUid', 'sentAt', 'read']);
       allow update:       if false;
     }
 
@@ -64,6 +82,15 @@ service cloud.firestore {
     // ── Commission ledger (payout data) ──────────────────────────────────────
     // Owner may read their own entries (stats panel); writes are Admin-only.
     match /commissions/{uid}/{document=**} {
+      allow read:  if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ── Daily usage counters (free-tier card-limit enforcement) ──────────────
+    // Written exclusively by Firebase Admin SDK on the server (usage route) so
+    // clients cannot self-reset the counter via browser DevTools or REST calls.
+    // Clients may read their own document to display remaining cards.
+    match /users/{uid}/usage/{doc} {
       allow read:  if isOwner(uid);
       allow write: if false;
     }
