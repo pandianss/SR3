@@ -17,6 +17,9 @@ dist-ssr/
 .DS_Store
 Thumbs.db
 
+# Claude Code local workspace
+.claude/
+
 # Editor
 .vscode/
 .idea/

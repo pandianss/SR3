@@ -206,10 +206,12 @@ router.post('/verify', requireFirebaseAuth, async (req, res) => {
     }
 
     // Verify purchase token belongs to the authenticated user (prevents token-sharing fraud).
+    // A missing obfuscatedExternalAccountId is treated as a failure, not a pass: otherwise
+    // any user could submit any valid active token and have premium granted to themselves.
     const tokenUid = extractUid(subData);
-    if (tokenUid && tokenUid !== uid) {
-      console.error('[Billing/verify] UID mismatch — token owner:', tokenUid, 'auth user:', uid);
-      return res.status(403).json({ error: 'Purchase token does not belong to this account.' });
+    if (!tokenUid || tokenUid !== uid) {
+      console.error('[Billing/verify] Token ownership not confirmed — token owner:', tokenUid ?? '(none)', 'auth user:', uid);
+      return res.status(403).json({ error: 'Purchase token ownership could not be confirmed for this account.' });
     }
 
     const expiresAt = getExpiryMs(subData) ?? (Date.now() + plan.months * 30 * 24 * 60 * 60 * 1000);

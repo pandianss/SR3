@@ -22,6 +22,15 @@ if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
   process.exit(1);
 }
 
+// Without these the Pub/Sub OIDC check in handleBillingWebhook cannot run, which
+// would leave the billing webhook open to forged RTDN events. Fail fast rather
+// than silently disabling forgery protection in production.
+if (process.env.NODE_ENV === 'production' &&
+    (!process.env.PUBSUB_SA_EMAIL || !process.env.PUBSUB_AUDIENCE_URL)) {
+  console.error('[Server] FATAL: PUBSUB_SA_EMAIL and PUBSUB_AUDIENCE_URL must be set in production to verify billing webhooks. Exiting.');
+  process.exit(1);
+}
+
 // Trust the first hop reverse-proxy (nginx / Railway / Cloudflare) so that
 // express-rate-limit sees the real client IP from X-Forwarded-For rather than
 // treating all requests as coming from the proxy's single IP.

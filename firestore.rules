@@ -30,10 +30,11 @@ service cloud.firestore {
     //   • Attempts to inject isPremium / subscription flags
     //   • Non-numeric xp / streak / level (prevents logic bypass via type coercion)
     match /users/{uid}/profile/{doc} {
-      allow read:  if isOwner(uid)
+      allow get:   if isOwner(uid)
         || (signedIn()
           && exists(/databases/$(database)/documents/users/$(request.auth.uid)/profile/data)
           && uid in get(/databases/$(database)/documents/users/$(request.auth.uid)/profile/data).data.get('partnerIds', []));
+      allow list:  if false;
       allow write: if isOwner(uid)
         && !("isPremium"    in request.resource.data)
         && !("subscription" in request.resource.data)
@@ -71,7 +72,8 @@ service cloud.firestore {
     // this). The owner may create THEIR code with zeroed counters. Counter
     // mutations are Admin-only so referral counts can't be self-inflated.
     match /referralCodes/{code} {
-      allow read:   if signedIn();
+      allow get:    if signedIn();
+      allow list:   if false;
       allow create: if signedIn()
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.totalReferred == 0

@@ -77,10 +77,10 @@ async function dedupedGeminiCall(key, geminiBody, ttlMs) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/gemini/status
-// Lightweight health check — no Gemini API call, no auth required.
+// Lightweight health check — no Gemini API call, requireFirebaseAuth.
 // Reports whether the key is present; key validity is verified at server start.
 // ─────────────────────────────────────────────────────────────────────────────
-router.get('/status', (_req, res) => {
+router.get('/status', requireFirebaseAuth, (_req, res) => {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
     return res.json({ status: 'missing', message: 'GEMINI_API_KEY is not set in the server environment.' });

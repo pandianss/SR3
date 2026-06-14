@@ -1,0 +1,6 @@
+# Railway/Nixpacks build config for the BACKEND deploy.
+# Without this override Nixpacks auto-runs the root "build" script (vite build),
+# which builds the frontend needlessly on the API host. We only need deps + the
+# Node server, so the build phase is a no-op.
+[phases.build]
+cmds = ["echo 'Backend-only deploy — frontend build skipped'"]

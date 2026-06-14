@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">
+  <!-- Favicon — simplified recall loop (mark enlarged, no edge highlight)
+       so the S-arrow stays legible at 16-32px. -->
+  <rect width="140" height="140" rx="31" fill="#0B1929"/>
+  <g transform="translate(-8.4,-7.8) scale(1.12)">
+    <path d="M95 44 A25 25 0 1 0 70 69 A25 25 0 1 1 45 94" fill="none" stroke="#E9A020" stroke-width="14" stroke-linecap="round"/>
+    <polygon points="35,87 55,87 45,68" fill="#E9A020"/>
+    <circle cx="95" cy="44" r="10" fill="#FDD060"/>
+  </g>
+</svg>

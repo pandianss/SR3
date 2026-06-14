@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <rect width="2732" height="2732" fill="#070F1C"/>
+  <g transform="translate(1086,996) scale(4)">
+    <rect width="140" height="140" rx="31" fill="#0B1929"/>
+    <rect x="1.5" y="1.5" width="137" height="137" rx="29.5" fill="none" stroke="#244066" stroke-opacity="0.5" stroke-width="3"/>
+    <path d="M95 44 A25 25 0 1 0 70 69 A25 25 0 1 1 45 94" fill="none" stroke="#E9A020" stroke-width="13" stroke-linecap="round"/>
+    <polygon points="36,86 54,86 45,69" fill="#E9A020"/>
+    <circle cx="95" cy="44" r="9" fill="#FDD060"/>
+  </g>
+  <text x="1366" y="1700" text-anchor="middle" font-family="Arial, 'Segoe UI', sans-serif" font-size="100" font-weight="400" fill="#EDF2F8">Super<tspan font-weight="700" fill="#E9A020">Recall</tspan></text>
+  <text x="1366" y="1780" text-anchor="middle" font-family="Arial, 'Segoe UI', sans-serif" font-size="44" font-weight="500" fill="#7890A8" letter-spacing="20">CAIIB</text>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="28 4 84 130">
+  <!-- Bare recall-loop mark, transparent background.
+       For light surfaces recolor strokes/fills to #B07210 (WCAG-safe gold). -->
+  <path d="M95 44 A25 25 0 1 0 70 69 A25 25 0 1 1 45 94" fill="none" stroke="#E9A020" stroke-width="13" stroke-linecap="round"/>
+  <polygon points="36,86 54,86 45,69" fill="#E9A020"/>
+  <circle cx="95" cy="44" r="9" fill="#FDD060"/>
+</svg>

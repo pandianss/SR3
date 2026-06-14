@@ -12,40 +12,52 @@ import { doc, getDoc } from "firebase/firestore";
 
 // ── Pricing strategy ─────────────────────────────────────────────────────────
 export const PLANS = {
+  // basePlanId MUST match the base-plan ID configured for each subscription
+  // product in Play Console (Monetise → Subscriptions → <product> → Base plans).
+  // Android subscription purchases require it; iOS ignores it. If these strings
+  // don't match Play Console exactly, purchaseProduct() fails on device.
   monthly: {
-    id:        "monthly",
-    productId: "caiib_premium_monthly",
-    label:     "Monthly",
-    price:     "₹149",
-    priceNum:  149,
-    period:    "/ month",
-    months:    1,
-    badge:     null,
-    highlight: false,
+    id:         "monthly",
+    productId:  "caiib_premium_monthly",
+    basePlanId: "monthly-plan",
+    label:      "Monthly",
+    price:      "₹149",
+    priceNum:   149,
+    period:     "/ month",
+    months:     1,
+    badge:      null,
+    highlight:  false,
   },
   exam: {
-    id:        "exam",
-    productId: "caiib_premium_3month",
-    label:     "Exam Ready",
-    price:     "₹349",
-    priceNum:  349,
-    period:    "/ 3 months",
-    months:    3,
-    badge:     "Most Popular",
-    highlight: true,
+    id:         "exam",
+    productId:  "caiib_premium_3month",
+    basePlanId: "exam-plan",
+    label:      "Exam Ready",
+    price:      "₹349",
+    priceNum:   349,
+    period:     "/ 3 months",
+    months:     3,
+    badge:      "Most Popular",
+    highlight:  true,
   },
   yearly: {
-    id:        "yearly",
-    productId: "caiib_premium_yearly",
-    label:     "Yearly",
-    price:     "₹999",
-    priceNum:  999,
-    period:    "/ year",
-    months:    12,
-    badge:     "Best Value",
-    highlight: false,
+    id:         "yearly",
+    productId:  "caiib_premium_yearly",
+    basePlanId: "yearly-plan",
+    label:      "Yearly",
+    price:      "₹999",
+    priceNum:   999,
+    period:     "/ year",
+    months:     12,
+    badge:      "Best Value",
+    highlight:  false,
   },
 };
+
+// productId → base plan ID, for the Android purchase flow.
+const BASE_PLAN_BY_PRODUCT = Object.fromEntries(
+  Object.values(PLANS).map((p) => [p.productId, p.basePlanId])
+);
 
 export const PREMIUM_FEATURES = {
   deepFocusMode:  "Deep Focus Mode (numerical scenarios + AI case studies)",
@@ -109,10 +121,11 @@ const API_BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '';
 
 export async function initBilling() {
   try {
-    // eslint-disable-next-line no-new-func
-    const { InAppPurchases } = await new Function('return import("@capacitor-community/in-app-purchases")')();
-    await InAppPurchases.initialize();
-    return InAppPurchases;
+    const { NativePurchases } = await import("@capgo/native-purchases");
+    // On web (and any platform without a Play/StoreKit billing client) this
+    // reports false, so callers fall back to the Play Store listing.
+    const { isBillingSupported } = await NativePurchases.isBillingSupported();
+    return isBillingSupported ? NativePurchases : null;
   } catch {
     return null;
   }
@@ -138,20 +151,25 @@ export async function purchaseSubscription(productId, uid = null, getToken = nul
   }
 
   try {
-    const { products } = await billing.getProducts({ productIds: [productId] });
+    const { products } = await billing.getProducts({
+      productIdentifiers: [productId],
+      productType: "subs",
+    });
     if (!products?.length) return { success: false, reason: "product_not_found" };
 
-    // Pass the Firebase UID to Play so the server can map token → user
-    // via obfuscatedExternalAccountId in the RTDN webhook.
-    // Note: support for obfuscatedAccountId depends on the Capacitor plugin version.
-    const purchaseOptions = uid
-      ? { productId, obfuscatedAccountId: uid }
-      : { productId };
+    // Pass the Firebase UID to Play as appAccountToken — on Android this maps to
+    // obfuscatedExternalAccountId, which the server reads (extractUid) to bind the
+    // purchase token to this user during /verify and the RTDN webhook.
+    const purchaseOptions = {
+      productIdentifier: productId,
+      productType: "subs",
+      ...(BASE_PLAN_BY_PRODUCT[productId] ? { planIdentifier: BASE_PLAN_BY_PRODUCT[productId] } : {}),
+      ...(uid ? { appAccountToken: uid } : {}),
+    };
 
     const result = await billing.purchaseProduct(purchaseOptions);
 
     // Immediately verify and grant premium without waiting for the webhook.
-    // The purchase token field name varies by plugin version.
     const purchaseToken = result?.purchaseToken ?? result?.transactionId ?? null;
 
     if (purchaseToken && uid && getToken) {
