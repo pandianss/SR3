@@ -35,9 +35,10 @@ is baked into the APK at build time.
 `X-Internal-Token` header. The APK calls the API directly and cannot, so setting it
 would 401 every request. Auth is enforced by Firebase ID tokens + App Check + rate limits.
 
-> Startup guards will **exit the process** in production if `CORS_ORIGIN`,
-> `PUBSUB_SA_EMAIL`, or `PUBSUB_AUDIENCE_URL` are missing. That's intentional —
-> set all three before the first deploy.
+> The startup guard **exits the process** in production if `CORS_ORIGIN` is
+> missing — so set it before the first deploy (`https://localhost`). Missing
+> `PUBSUB_*` only logs a warning; the billing webhook stays fail-closed (rejects
+> all RTDN events) until they're set, so you can deploy before wiring Play billing.
 
 ### 1.3 Get the public URL
 Railway → service → **Settings → Networking → Generate Domain**.

@@ -22,13 +22,13 @@ if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
   process.exit(1);
 }
 
-// Without these the Pub/Sub OIDC check in handleBillingWebhook cannot run, which
-// would leave the billing webhook open to forged RTDN events. Fail fast rather
-// than silently disabling forgery protection in production.
+// Warn (don't exit) when Pub/Sub OIDC vars are missing. The billing webhook is
+// already fail-closed at runtime — verifyPubSubToken() rejects every RTDN event
+// in production until both vars are set — so the server can safely boot and serve
+// the rest of the API (health, auth, AI, usage) before Play billing is wired up.
 if (process.env.NODE_ENV === 'production' &&
     (!process.env.PUBSUB_SA_EMAIL || !process.env.PUBSUB_AUDIENCE_URL)) {
-  console.error('[Server] FATAL: PUBSUB_SA_EMAIL and PUBSUB_AUDIENCE_URL must be set in production to verify billing webhooks. Exiting.');
-  process.exit(1);
+  console.warn('[Server] WARNING: PUBSUB_SA_EMAIL / PUBSUB_AUDIENCE_URL not set — the billing webhook will REJECT all RTDN events until both are configured.');
 }
 
 // Trust the first hop reverse-proxy (nginx / Railway / Cloudflare) so that
