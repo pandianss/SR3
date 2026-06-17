@@ -152,9 +152,29 @@ export default function PracticeQuiz({ userProfile, isPremium, onPaywall }) {
             <span style={{ color: C.dim, fontSize: 9 }}>{q.subjectId} · {q.topicId}</span>
           </div>
 
+          {/* Case study scenario if present */}
+          {q.scenario && (
+            <div style={{ background: `${C.accent}0a`, borderLeft: `4px solid ${C.accent}`, borderRadius: 8, padding: 14, marginBottom: 4 }}>
+              <p style={{ color: C.muted, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 6px" }}>Case Study Scenario</p>
+              <p style={{ color: C.text, fontSize: 12, lineHeight: 1.5, margin: 0, whiteSpace: "pre-line" }}>{q.scenario}</p>
+            </div>
+          )}
+
           {/* Question text */}
           <div style={{ background: C.card, border: `1.5px solid ${C.border}`, borderRadius: 14, padding: 16 }}>
             <p style={{ color: C.text, fontSize: 13, fontWeight: 600, lineHeight: 1.6, margin: 0 }}>{q.q}</p>
+            
+            {/* Statements if present (e.g. for multi-statement questions) */}
+            {q.statements && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 12, paddingLeft: 8, borderLeft: `2px solid ${C.border}` }}>
+                {q.statements.map((stmt, sIdx) => (
+                  <div key={sIdx} style={{ fontSize: 12, color: C.text, lineHeight: 1.4 }}>
+                    <strong style={{ color: C.accent, marginRight: 6 }}>{["I", "II", "III", "IV", "V"][sIdx]}.</strong>
+                    {stmt}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Options */}

@@ -20,7 +20,7 @@ export const MICRO_LESSONS = [
         title: "The Three Regulatory Pillars",
         pillars: [
           { e: "🛡️", n: "Pillar 1", d: "Minimum capital standards for Credit, Market, and Operational risks." },
-          { e: "🔍", n: "Pillar 2", d: "Supervisory review process (ICAAP) to identify and evaluate bank-wide risk risks." },
+          { e: "🔍", n: "Pillar 2", d: "Supervisory review process (ICAAP) to identify and evaluate bank-wide risks." },
           { e: "📢", n: "Pillar 3", d: "Market discipline through comprehensive disclosure of risk exposures and capital." }
         ]
       },
