@@ -1,9 +1,14 @@
 import 'dotenv/config';
 import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const LEGAL_DIR = join(__dirname, '..', 'public', 'legal');
 
 import { requireInternalToken } from './middleware/auth.js';
 import { globalLimiter } from './middleware/rateLimit.js';
@@ -81,6 +86,10 @@ app.use('/api/usage',     usageRouter);
 app.get('/health', (_req, res) =>
   res.json({ ok: true, uptime: Math.round(process.uptime()) })
 );
+
+// ── Public legal pages (for Play Store listing & in-app links) ────────────────
+app.get('/privacy', (_req, res) => res.sendFile(join(LEGAL_DIR, 'privacy.html')));
+app.get('/terms',   (_req, res) => res.sendFile(join(LEGAL_DIR, 'terms.html')));
 
 // ── 404 catch-all ─────────────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Not found.' }));
