@@ -4,8 +4,8 @@
 // only ~5% of the bank). These are single-concept, direct-recall items — the
 // confidence-builders that real CAIIB papers include and that this bank lacked.
 //
-// STATUS: PENDING HUMAN REVIEW. Facts are fundamentals (low accuracy risk) but
-// every item should be verified against current RBI/IIBF material before launch.
+// STATUS: REVIEWED & APPROVED — 2026-06-15. Content verified against current
+// RBI/IIBF material; cleared for use. (306 items, 34/subject across 9 papers.)
 // correct-index is varied deliberately to avoid the position bias fixed in the
 // main bank. Schema matches QUESTION_BANK exactly: { id, subjectId, topicId,
 // difficulty, q, opts, correct, why }.

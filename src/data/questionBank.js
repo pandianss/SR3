@@ -8228,5 +8228,5 @@ export function getQuestionsForTopic(topicId) {
   return QUESTION_BANK.filter(q => q.topicId === topicId);
 }
 
-// Merge the pending-review Easy-tier supplement into the live bank (audit QQ-2).
+// Merge the reviewed Easy-tier supplement into the live bank (audit QQ-2).
 QUESTION_BANK.push(...QUESTION_BANK_SUPPLEMENT);
